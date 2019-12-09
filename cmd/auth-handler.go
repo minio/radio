@@ -89,10 +89,6 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeJWT
 	} else if isRequestPostPolicySignatureV4(r) {
 		return authTypePostPolicy
-	} else if _, ok := r.URL.Query()[xhttp.Action]; ok {
-		return authTypeSTS
-	} else if _, ok := r.Header[xhttp.Authorization]; !ok {
-		return authTypeAnonymous
 	}
 	return authTypeUnknown
 }
@@ -228,7 +224,6 @@ func setAuthHandler(h http.Handler) http.Handler {
 
 // List of all support S3 auth types.
 var supportedS3AuthTypes = map[authType]struct{}{
-	authTypeAnonymous:       {},
 	authTypePresigned:       {},
 	authTypePresignedV2:     {},
 	authTypeSigned:          {},
