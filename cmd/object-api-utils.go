@@ -14,11 +14,9 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/minio/minio-go/v6/pkg/s3utils"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/minio/radio/cmd/logger"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
@@ -33,12 +31,6 @@ const (
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
-	// On compressed files bigger than this;
-	compReadAheadSize = 100 << 20
-	// Read this many buffers ahead.
-	compReadAheadBuffers = 5
-	// Size of each buffer.
-	compReadAheadBufSize = 1 << 20
 )
 
 // isMinioBucket returns true if given bucket is a MinIO internal
@@ -141,32 +133,8 @@ func IsValidObjectPrefix(object string) bool {
 	return true
 }
 
-// checkObjectNameForLengthAndSlash -check for the validity of object name length and prefis as slash
-func checkObjectNameForLengthAndSlash(bucket, object string) error {
-	// Check for the length of object name
-	if len(object) > 1024 {
-		return ObjectNameTooLong{
-			Bucket: bucket,
-			Object: object,
-		}
-	}
-	// Check for slash as prefix in object name
-	if HasPrefix(object, SlashSeparator) {
-		return ObjectNamePrefixAsSlash{
-			Bucket: bucket,
-			Object: object,
-		}
-	}
-	return nil
-}
-
 // SlashSeparator - slash separator.
 const SlashSeparator = "/"
-
-// retainSlash - retains slash from a path.
-func retainSlash(s string) string {
-	return strings.TrimSuffix(s, SlashSeparator) + SlashSeparator
-}
 
 // pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
 func pathJoin(elem ...string) string {
@@ -273,31 +241,6 @@ func isStringEqual(s1 string, s2 string) bool {
 	return s1 == s2
 }
 
-// Ignores all reserved bucket names or invalid bucket names.
-func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
-	bucketEntry = strings.TrimSuffix(bucketEntry, SlashSeparator)
-	if strict {
-		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {
-			return true
-		}
-	} else {
-		if err := s3utils.CheckValidBucketName(bucketEntry); err != nil {
-			return true
-		}
-	}
-	return isMinioMetaBucket(bucketEntry) || isMinioReservedBucket(bucketEntry)
-}
-
-// Returns true if input bucket is a reserved minio meta bucket '.minio.sys'.
-func isMinioMetaBucket(bucketName string) bool {
-	return bucketName == minioMetaBucket
-}
-
-// Returns true if input bucket is a reserved minio bucket 'minio'.
-func isMinioReservedBucket(bucketName string) bool {
-	return bucketName == minioReservedBucket
-}
-
 // GetActualSize - read the decompressed size from the meta json.
 func (o ObjectInfo) GetActualSize() int64 {
 	metadata := o.UserDefined
@@ -311,45 +254,6 @@ func (o ObjectInfo) GetActualSize() int64 {
 	return -1
 }
 
-// Utility which returns if a string is present in the list.
-// Comparison is case insensitive.
-func hasStringSuffixInSlice(str string, list []string) bool {
-	str = strings.ToLower(str)
-	for _, v := range list {
-		if strings.HasSuffix(str, strings.ToLower(v)) {
-			return true
-		}
-	}
-	return false
-}
-
-// Returns true if any of the given wildcard patterns match the matchStr.
-func hasPattern(patterns []string, matchStr string) bool {
-	for _, pattern := range patterns {
-		if ok := wildcard.MatchSimple(pattern, matchStr); ok {
-			return true
-		}
-	}
-	return false
-}
-
-// Returns the part file name which matches the partNumber and etag.
-func getPartFile(entries []string, partNumber int, etag string) string {
-	for _, entry := range entries {
-		if strings.HasPrefix(entry, fmt.Sprintf("%.5d.%s.", partNumber, etag)) {
-			return entry
-		}
-	}
-	return ""
-}
-
-// byBucketName is a collection satisfying sort.Interface.
-type byBucketName []BucketInfo
-
-func (d byBucketName) Len() int           { return len(d) }
-func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
-
 // GetObjectReader is a type that wraps a reader with a lock to
 // provide a ReadCloser interface that unlocks on Close()
 type GetObjectReader struct {
@@ -357,7 +261,7 @@ type GetObjectReader struct {
 	pReader io.Reader
 
 	cleanUpFns []func()
-	precondFn  func(ObjectInfo, string) bool
+	precondFn  func(ObjectInfo) bool
 	once       sync.Once
 }
 
@@ -365,7 +269,7 @@ type GetObjectReader struct {
 // reader. This ignores any object properties.
 func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (*GetObjectReader, error) {
 	if pcfn != nil {
-		if ok := pcfn(oi, ""); ok {
+		if ok := pcfn(oi); ok {
 			// Call the cleanup funcs
 			for i := len(cleanupFns) - 1; i >= 0; i-- {
 				cleanupFns[i]()
@@ -411,7 +315,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 	fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 		cFns = append(cleanUpFns, cFns...)
 		if pcfn != nil {
-			if ok := pcfn(oi, ""); ok {
+			if ok := pcfn(oi); ok {
 				// Call the cleanup funcs
 				for i := len(cFns) - 1; i >= 0; i-- {
 					cFns[i]()

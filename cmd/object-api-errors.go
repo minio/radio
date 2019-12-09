@@ -407,18 +407,6 @@ func (e BackendDown) Error() string {
 	return "Backend down"
 }
 
-// isErrBucketNotFound - Check if error type is BucketNotFound.
-func isErrBucketNotFound(err error) bool {
-	_, ok := err.(BucketNotFound)
-	return ok
-}
-
-// isErrObjectNotFound - Check if error type is ObjectNotFound.
-func isErrObjectNotFound(err error) bool {
-	_, ok := err.(ObjectNotFound)
-	return ok
-}
-
 // PreConditionFailed - Check if copy precondition failed
 type PreConditionFailed struct{}
 

@@ -53,13 +53,6 @@ type formatCacheV1 struct {
 // formatCacheV2 is same as formatCacheV1
 type formatCacheV2 = formatCacheV1
 
-// Used to detect the version of "cache" format.
-type formatCacheVersionDetect struct {
-	Cache struct {
-		Version string `json:"version"`
-	} `json:"cache"`
-}
-
 // Return a slice of format, to be used to format uninitialized disks.
 func newFormatCacheV2(drives []string) []*formatCacheV2 {
 	diskCount := len(drives)
@@ -82,15 +75,6 @@ func newFormatCacheV2(drives []string) []*formatCacheV2 {
 		format.Cache.Disks = disks
 	}
 	return formats
-}
-
-// Returns formatCache.Cache.Version
-func formatCacheGetVersion(r io.ReadSeeker) (string, error) {
-	format := &formatCacheVersionDetect{}
-	if err := jsonLoad(r, format); err != nil {
-		return "", err
-	}
-	return format.Cache.Version, nil
 }
 
 // Creates a new cache format.json if unformatted.

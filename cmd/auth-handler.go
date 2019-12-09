@@ -5,13 +5,11 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -97,31 +95,6 @@ func getRequestAuthType(r *http.Request) authType {
 		return authTypeAnonymous
 	}
 	return authTypeUnknown
-}
-
-// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
-// It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
-	var cred auth.Credentials
-	s3Err := ErrAccessDenied
-	if _, ok := r.Header[xhttp.AmzContentSha256]; ok &&
-		getRequestAuthType(r) == authTypeSigned && !skipContentSha256Cksum(r) {
-		// We only support admin credentials to access admin APIs.
-		cred, s3Err = getReqAccessKeyV4(r, region, serviceS3)
-		if s3Err != ErrNone {
-			return cred, s3Err
-		}
-
-		// we only support V4 (no presign) with auth body
-		s3Err = isReqAuthenticated(ctx, r, region, serviceS3)
-	}
-	if s3Err != ErrNone {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
-		ctx := logger.SetReqInfo(ctx, reqInfo)
-		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description), logger.Application)
-	}
-
-	return cred, checkClaimsFromToken(r, cred)
 }
 
 // Fetch the security token set by the client.

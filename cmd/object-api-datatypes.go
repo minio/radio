@@ -26,13 +26,6 @@ type ObjectPartInfo struct {
 	ActualSize int64  `json:"actualSize"`
 }
 
-// byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []ObjectPartInfo
-
-func (t byObjectPartNumber) Len() int           { return len(t) }
-func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
-
 // ObjectInfo - represents object metadata.
 type ObjectInfo struct {
 	// Name of the bucket.

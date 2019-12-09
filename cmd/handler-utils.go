@@ -15,34 +15,7 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/handlers"
 )
-
-// Parses location constraint from the incoming reader.
-func parseLocationConstraint(r *http.Request) (location string, s3Error APIErrorCode) {
-	// If the request has no body with content-length set to 0,
-	// we do not have to validate location constraint. Bucket will
-	// be created at default region.
-	locationConstraint := createBucketLocationConfiguration{}
-	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
-	if err != nil && r.ContentLength != 0 {
-		logger.LogIf(context.Background(), err)
-		// Treat all other failures as XML parsing errors.
-		return "", ErrMalformedXML
-	} // else for both err as nil or io.EOF
-	location = locationConstraint.Location
-	if location == "" {
-		location = globalServerRegion
-	}
-	return location, ErrNone
-}
-
-// Validates input location is same as configured region
-// of MinIO server.
-func isValidLocation(location string) bool {
-	return globalServerRegion == "" || globalServerRegion == location
-}
 
 // Supported headers that needs to be extracted.
 var supportedHeaders = []string{
@@ -167,44 +140,6 @@ func getRedirectPostRawQuery(objInfo ObjectInfo) string {
 	return redirectValues.Encode()
 }
 
-// Returns access credentials in the request Authorization header.
-func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
-	cred, _ = getReqAccessKeyV4(r, region, serviceS3)
-	if cred.AccessKey == "" {
-		cred, _ = getReqAccessKeyV2(r)
-	}
-	return cred
-}
-
-// Extract request params to be sent with event notifiation.
-func extractReqParams(r *http.Request) map[string]string {
-	if r == nil {
-		return nil
-	}
-
-	region := globalServerRegion
-	cred := getReqAccessCred(r, region)
-
-	// Success.
-	return map[string]string{
-		"region":          region,
-		"accessKey":       cred.AccessKey,
-		"sourceIPAddress": handlers.GetSourceIP(r),
-		// Add more fields here.
-	}
-}
-
-// Extract response elements to be sent with event notifiation.
-func extractRespElements(w http.ResponseWriter) map[string]string {
-
-	return map[string]string{
-		"requestId":      w.Header().Get(xhttp.AmzRequestID),
-		"content-length": w.Header().Get(xhttp.ContentLength),
-		// Add more fields here.
-	}
-}
-
-// Trims away `aws-chunked` from the content-encoding header if present.
 // Streaming signature clients can have custom content-encoding such as
 // `aws-chunked,gzip` here we need to only save `gzip`.
 // For more refer http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html

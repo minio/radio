@@ -7,8 +7,8 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/radio/cmd/logger"
 )
 
 func newCertsDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) *CertsDir {

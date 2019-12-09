@@ -13,15 +13,14 @@ import (
 
 	"time"
 
-	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/policy"
 	"github.com/minio/minio/pkg/s3select"
+	"github.com/minio/radio/cmd/logger"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -33,11 +32,6 @@ var supportedHeadGetReqParams = map[string]string{
 	"response-content-language":    xhttp.ContentLanguage,
 	"response-content-disposition": xhttp.ContentDisposition,
 }
-
-const (
-	compressionAlgorithmV1 = "golang/snappy/LZ77"
-	compressionAlgorithmV2 = "klauspost/compress/s2"
-)
 
 // setHeadGetRespHeaders - set any requested parameters as response headers.
 func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
@@ -340,20 +334,6 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 
 	// Copy is default behavior if not x-amz-metadata-directive is set.
 	return defaultMeta, nil
-}
-
-// Returns a minio-go Client configured to access remote host described by destDNSRecord
-// Applicable only in a federated deployment
-var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	cred := getReqAccessCred(r, globalServerRegion)
-	// In a federated deployment, all the instances share config files
-	// and hence expected to have same credentials.
-	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
-	if err != nil {
-		return nil, err
-	}
-	core.SetCustomTransport(NewCustomHTTPTransport())
-	return core, nil
 }
 
 // CopyObjectHandler - Copy Object
@@ -819,8 +799,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 		}
 	}
-	checkCopyPartPrecondFn := func(o ObjectInfo, encETag string) bool {
-		return checkCopyObjectPartPreconditions(ctx, w, r, o, encETag)
+	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
+		return checkCopyObjectPartPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
 	srcOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
@@ -857,9 +837,9 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	actualPartSize = length
-	var reader io.Reader
-	reader = gr
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize, globalCLIContext.StrictS3Compat)
+	reader := gr
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "",
+		actualPartSize, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

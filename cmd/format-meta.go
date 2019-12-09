@@ -6,11 +6,6 @@ const (
 	formatConfigFile = "format.json"
 )
 
-const (
-	// Version of the formatMetaV1
-	formatMetaVersionV1 = "1"
-)
-
 // format.json currently has the format:
 // {
 //   "version": "1",

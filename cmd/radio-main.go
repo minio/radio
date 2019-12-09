@@ -144,9 +144,6 @@ func StartRadio(ctx *cli.Context, radio *Radio) {
 
 	router := mux.NewRouter().SkipClean(true)
 
-	// Register bootstrap REST router for distributed setups.
-	registerBootstrapRESTHandlers(router)
-
 	registerLockRESTHandlers(router, globalEndpoints)
 
 	// Add healthcheck router
@@ -222,9 +219,6 @@ func StartRadio(ctx *cli.Context, radio *Radio) {
 		// Print radio startup message.
 		printRadioStartupMessage(getAPIEndpoints())
 	}
-
-	// Set uptime time after object layer has initialized.
-	globalBootTime = UTCNow()
 
 	handleSignals()
 }

@@ -20,6 +20,10 @@ var (
 	envTokenValue = env.Get("RADIO_LOCK_TOKEN", "")
 )
 
+func newAuthToken() string {
+	return envTokenValue
+}
+
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 

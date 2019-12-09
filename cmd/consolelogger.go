@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/pkg/pubsub"
 	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/radio/cmd/logger/message/log"
 	"github.com/minio/radio/cmd/logger/target/console"
-	"github.com/minio/minio/pkg/pubsub"
 )
 
 // number of log messages to buffer

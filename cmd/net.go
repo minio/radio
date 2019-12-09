@@ -11,8 +11,8 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/radio/cmd/logger"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/radio/cmd/logger"
 )
 
 // IPv4 addresses of local host.

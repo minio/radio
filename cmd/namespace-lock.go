@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/minio/lsync"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/radio/cmd/logger"
 )
 
 // local lock servers

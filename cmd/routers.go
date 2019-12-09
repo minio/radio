@@ -16,8 +16,6 @@ var globalHandlers = []HandlerFunc{
 	setRequestHeaderSizeLimitHandler,
 	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 	setCrossDomainPolicy,
-	// Validates if incoming request is for restricted buckets.
-	setReservedBucketHandler,
 	// Validates all incoming requests to have a valid date header.
 	setTimeValidityHandler,
 	// CORS setting for all browser API requests.

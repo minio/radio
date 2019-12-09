@@ -11,11 +11,6 @@ import (
 func handleSignals() {
 	// Custom exit function
 	exit := func(success bool) {
-		// If global profiler is set stop before we exit.
-		if globalProfiler != nil {
-			globalProfiler.Stop()
-		}
-
 		if success {
 			os.Exit(0)
 		}

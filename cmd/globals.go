@@ -5,8 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/set"
-
 	humanize "github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
@@ -52,12 +50,6 @@ const (
 	// The maximum allowed time difference between the incoming request
 	// date and server date during signature verification.
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
-
-	// Refresh interval to update in-memory iam config cache.
-	globalRefreshIAMInterval = 5 * time.Minute
-
-	// Limit of location constraint XML for unauthenticted PUT bucket operations.
-	maxLocationConstraintSize = 3 * humanize.MiByte
 )
 
 var globalCLIContext = struct {
@@ -71,8 +63,6 @@ var (
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalRadioDefaultRegion
 
-	// MinIO local server address (in `host:port` format)
-	globalRadioAddr = ""
 	// MinIO default port, can be changed through command line.
 	globalRadioPort = globalRadioDefaultPort
 	// Holds the host that was passed using --address
@@ -106,15 +96,11 @@ var (
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
 
-	// Time when object layer was initialized on start up.
-	globalBootTime time.Time
-
 	globalLocalCreds = map[string]auth.Credentials{}
 
 	globalPublicCerts []*x509.Certificate
 
-	globalDomainNames []string      // Root domains for virtual host style requests
-	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
+	globalDomainNames []string // Root domains for virtual host style requests
 
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops

@@ -9,10 +9,7 @@ import (
 
 const (
 	// Default minio configuration directory where below configuration files/directories are stored.
-	defaultMinioCertsDir = ".minio"
-
-	// Directory contains below files/directories for HTTPS configuration.
-	certsDir = "certs"
+	defaultRadioCertsDir = ".radio/certs"
 
 	// Directory contains all CA certificates other than system defaults for HTTPS.
 	certsCADir = "CAs"
@@ -35,7 +32,7 @@ func getDefaultCertsDir() string {
 		return ""
 	}
 
-	return filepath.Join(homeDir, defaultMinioCertsDir)
+	return filepath.Join(homeDir, defaultRadioCertsDir)
 }
 
 func getDefaultCertsCADir() string {

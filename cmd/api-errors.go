@@ -1325,14 +1325,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
-	case errNoSuchUser:
-		apiErr = ErrAdminNoSuchUser
-	case errNoSuchGroup:
-		apiErr = ErrAdminNoSuchGroup
-	case errGroupNotEmpty:
-		apiErr = ErrAdminGroupNotEmpty
-	case errNoSuchPolicy:
-		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
 		apiErr = ErrSignatureDoesNotMatch
 	case errInvalidRange:

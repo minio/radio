@@ -8,8 +8,6 @@ import (
 	"github.com/minio/radio/cmd/logger"
 )
 
-const minioConfigPrefix = "config"
-
 func lookupConfigEnv() (err error) {
 	globalServerRegion, err = config.LookupRegion()
 	if err != nil {

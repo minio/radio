@@ -19,8 +19,8 @@ var (
 //  x-amz-copy-source-if-unmodified-since
 //  x-amz-copy-source-if-match
 //  x-amz-copy-source-if-none-match
-func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, encETag string) bool {
-	return checkCopyObjectPreconditions(ctx, w, r, objInfo, encETag)
+func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
+	return checkCopyObjectPreconditions(ctx, w, r, objInfo)
 }
 
 // Validates the preconditions for CopyObject, returns true if CopyObject operation should not proceed.
@@ -29,13 +29,10 @@ func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter
 //  x-amz-copy-source-if-unmodified-since
 //  x-amz-copy-source-if-match
 //  x-amz-copy-source-if-none-match
-func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, encETag string) bool {
+func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodPut {
 		return false
-	}
-	if encETag == "" {
-		encETag = objInfo.ETag
 	}
 	// If the object doesn't have a modtime (IsZero), or the modtime
 	// is obviously garbage (Unix time == 0), then ignore modtimes

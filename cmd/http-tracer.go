@@ -65,7 +65,7 @@ func (r *recordRequest) Data() []byte {
 // getOpName sanitizes the operation name for mc
 func getOpName(name string) (op string) {
 	op = strings.TrimPrefix(name, "github.com/minio/radio/cmd.")
-	op = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
+	op = strings.TrimPrefix(op, "github.com/minio/minio/cmd.")
 	op = strings.TrimSuffix(op, "Handler-fm")
 	op = strings.Replace(op, "objectAPIHandlers", "s3", 1)
 	op = strings.Replace(op, "(*lockRESTServer)", "internal", 1)

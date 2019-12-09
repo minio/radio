@@ -134,63 +134,6 @@ const (
 	loginPathPrefix         = SlashSeparator + "login"
 )
 
-// guessIsHealthCheckReq - returns true if incoming request looks
-// like healthcheck request
-func guessIsHealthCheckReq(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-	aType := getRequestAuthType(req)
-	return aType == authTypeAnonymous && (req.Method == http.MethodGet || req.Method == http.MethodHead) &&
-		(req.URL.Path == healthCheckPathPrefix+healthCheckLivenessPath ||
-			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath)
-}
-
-// guessIsMetricsReq - returns true if incoming request looks
-// like metrics request
-func guessIsMetricsReq(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-	aType := getRequestAuthType(req)
-	return (aType == authTypeAnonymous || aType == authTypeJWT) &&
-		req.URL.Path == minioReservedBucketPath+prometheusMetricsPath
-}
-
-// guessIsLoginSTSReq - returns true if incoming request is Login STS user
-func guessIsLoginSTSReq(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-	return strings.HasPrefix(req.URL.Path, loginPathPrefix) ||
-		(req.Method == http.MethodPost && req.URL.Path == SlashSeparator &&
-			getRequestAuthType(req) == authTypeSTS)
-}
-
-// Adds verification for incoming paths.
-type minioReservedBucketHandler struct {
-	handler http.Handler
-}
-
-func setReservedBucketHandler(h http.Handler) http.Handler {
-	return minioReservedBucketHandler{h}
-}
-
-func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch {
-	case guessIsHealthCheckReq(r), guessIsMetricsReq(r):
-		// Allow access to reserved buckets
-	default:
-		// For all other requests reject access to reserved buckets
-		bucketName, _ := request2BucketObjectName(r)
-		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL)
-			return
-		}
-	}
-	h.handler.ServeHTTP(w, r)
-}
-
 type timeValidityHandler struct {
 	handler http.Handler
 }
@@ -259,10 +202,6 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.handler.ServeHTTP(w, r)
-}
-
-type resourceHandler struct {
-	handler http.Handler
 }
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)

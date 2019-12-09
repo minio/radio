@@ -7,29 +7,9 @@ import (
 	"syscall"
 )
 
-// Function not implemented error
-func isSysErrNoSys(err error) bool {
-	return errors.Is(err, syscall.ENOSYS)
-}
-
-// Not supported error
-func isSysErrOpNotSupported(err error) bool {
-	return errors.Is(err, syscall.EOPNOTSUPP)
-}
-
-// No space left on device error
-func isSysErrNoSpace(err error) bool {
-	return errors.Is(err, syscall.ENOSPC)
-}
-
 // Input/output error
 func isSysErrIO(err error) bool {
 	return errors.Is(err, syscall.EIO)
-}
-
-// Check if the given error corresponds to EISDIR (is a directory).
-func isSysErrIsDir(err error) bool {
-	return errors.Is(err, syscall.EISDIR)
 }
 
 // Check if the given error corresponds to ENOTDIR (is not a directory).
@@ -75,27 +55,6 @@ func isSysErrPathNotFound(err error) bool {
 		}
 	}
 	return false
-}
-
-// Check if the given error corresponds to the specific ERROR_INVALID_HANDLE for windows
-func isSysErrHandleInvalid(err error) bool {
-	if runtime.GOOS != globalWindowsOSName {
-		return false
-	}
-	// Check if err contains ERROR_INVALID_HANDLE errno
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
-		var errno syscall.Errno
-		if errors.As(pathErr.Err, &errno) {
-			// ERROR_PATH_NOT_FOUND
-			return errno == 0x6
-		}
-	}
-	return false
-}
-
-func isSysErrCrossDevice(err error) bool {
-	return errors.Is(err, syscall.EXDEV)
 }
 
 // Check if given error corresponds to too many open files

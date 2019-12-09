@@ -18,8 +18,8 @@ import (
 
 	"github.com/djherbis/atime"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/radio/cmd/logger"
 	"github.com/ncw/directio"
 )
 

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/radio/cmd/logger"
 )
 
 const (
@@ -662,17 +662,9 @@ type mimeType string
 const (
 	// Means no response type.
 	mimeNone mimeType = ""
-	// Means response type is JSON.
-	mimeJSON mimeType = "application/json"
 	// Means response type is XML.
 	mimeXML mimeType = "application/xml"
 )
-
-// writeSuccessResponseJSON writes success headers and response if any,
-// with content-type set to `application/json`.
-func writeSuccessResponseJSON(w http.ResponseWriter, response []byte) {
-	writeResponse(w, http.StatusOK, response, mimeJSON)
-}
 
 // writeSuccessResponseXML writes success headers and response if any,
 // with content-type set to `application/xml`.
@@ -718,46 +710,6 @@ func writeErrorResponseHeadersOnly(w http.ResponseWriter, err APIError) {
 func writeErrorResponseString(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	// Generate string error response.
 	writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
-}
-
-// writeErrorResponseJSON - writes error response in JSON format;
-// useful for admin APIs.
-func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
-	// Generate error response.
-	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
-	encodedErrorResponse := encodeResponseJSON(errorResponse)
-	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
-}
-
-// writeVersionMismatchResponse - writes custom error responses for version mismatches.
-func writeVersionMismatchResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, isJSON bool) {
-	if isJSON {
-		// Generate error response.
-		errorResponse := getAPIErrorResponse(ctx, err, reqURL.String(), w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
-		writeResponse(w, err.HTTPStatusCode, encodeResponseJSON(errorResponse), mimeJSON)
-	} else {
-		writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
-	}
-}
-
-// writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,
-// but accepts the error message directly (this allows messages to be
-// dynamically generated.)
-func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIError,
-	errBody string, reqURL *url.URL) {
-
-	reqInfo := logger.GetReqInfo(ctx)
-	errorResponse := APIErrorResponse{
-		Code:       err.Code,
-		Message:    errBody,
-		Resource:   reqURL.Path,
-		BucketName: reqInfo.BucketName,
-		Key:        reqInfo.ObjectName,
-		RequestID:  w.Header().Get(xhttp.AmzRequestID),
-		HostID:     globalDeploymentID,
-	}
-	encodedErrorResponse := encodeResponseJSON(errorResponse)
-	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
 
 // writeCustomErrorResponseXML - similar to writeErrorResponse,

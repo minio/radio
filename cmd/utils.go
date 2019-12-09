@@ -1,30 +1,25 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/radio/cmd/logger"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/pkg/profile"
 )
 
 // IsErrIgnored returns whether given error is ignored or not.
@@ -77,26 +72,6 @@ const (
 	httpsScheme = "https"
 )
 
-// nopCharsetConverter is a dummy charset convert which just copies input to output,
-// it is used to ignore custom encoding charset in S3 XML body.
-func nopCharsetConverter(label string, input io.Reader) (io.Reader, error) {
-	return input, nil
-}
-
-// xmlDecoder provide decoded value in xml.
-func xmlDecoder(body io.Reader, v interface{}, size int64) error {
-	var lbody io.Reader
-	if size > 0 {
-		lbody = io.LimitReader(body, size)
-	} else {
-		lbody = body
-	}
-	d := xml.NewDecoder(lbody)
-	// Ignore any encoding set in the XML body
-	d.CharsetReader = nopCharsetConverter
-	return d.Decode(v)
-}
-
 // checkValidMD5 - verify if valid md5, returns md5 in bytes.
 func checkValidMD5(h http.Header) ([]byte, error) {
 	md5B64, ok := h["Content-Md5"]
@@ -116,9 +91,6 @@ const (
 	// use cases where users are going to upload large files
 	// using 'curl' and presigned URL.
 	globalMaxObjectSize = 5 * humanize.TiByte
-
-	// Minimum Part size for multipart upload is 5MiB
-	globalMinPartSize = 5 * humanize.MiByte
 
 	// Maximum Part size for multipart upload is 5GiB
 	globalMaxPartSize = 5 * humanize.GiByte
@@ -142,11 +114,6 @@ func isMaxAllowedPartSize(size int64) bool {
 	return size > globalMaxPartSize
 }
 
-// Check if part size is more than or equal to minimum allowed size.
-func isMinAllowedPartSize(size int64) bool {
-	return size >= globalMinPartSize
-}
-
 // isMaxPartNumber - Check if part ID is greater than the maximum allowed ID.
 func isMaxPartID(partID int) bool {
 	return partID > globalMaxPartID
@@ -162,124 +129,6 @@ func contains(slice interface{}, elem interface{}) bool {
 		}
 	}
 	return false
-}
-
-// profilerWrapper is created becauses pkg/profiler doesn't
-// provide any API to calculate the profiler file path in the
-// disk since the name of this latter is randomly generated.
-type profilerWrapper struct {
-	stopFn func()
-	pathFn func() string
-}
-
-func (p profilerWrapper) Stop() {
-	p.stopFn()
-}
-
-func (p profilerWrapper) Path() string {
-	return p.pathFn()
-}
-
-// Returns current profile data, returns error if there is no active
-// profiling in progress. Stops an active profile.
-func getProfileData() ([]byte, error) {
-	if globalProfiler == nil {
-		return nil, errors.New("profiler not enabled")
-	}
-
-	profilerPath := globalProfiler.Path()
-
-	// Stop the profiler
-	globalProfiler.Stop()
-
-	profilerFile, err := os.Open(profilerPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return ioutil.ReadAll(profilerFile)
-}
-
-// Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
-func startProfiler(profilerType, dirPath string) (minioProfiler, error) {
-	var err error
-	if dirPath == "" {
-		dirPath, err = ioutil.TempDir("", "profile")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var profiler interface {
-		Stop()
-	}
-
-	var profilerFileName string
-
-	// Enable profiler and set the name of the file that pkg/pprof
-	// library creates to store profiling data.
-	switch profilerType {
-	case "cpu":
-		profiler = profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "cpu.pprof"
-	case "mem":
-		profiler = profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "mem.pprof"
-	case "block":
-		profiler = profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "block.pprof"
-	case "mutex":
-		profiler = profile.Start(profile.MutexProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "mutex.pprof"
-	case "trace":
-		profiler = profile.Start(profile.TraceProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "trace.out"
-	default:
-		return nil, errors.New("profiler type unknown")
-	}
-
-	return &profilerWrapper{
-		stopFn: profiler.Stop,
-		pathFn: func() string {
-			return filepath.Join(dirPath, profilerFileName)
-		},
-	}, nil
-}
-
-// minioProfiler - minio profiler interface.
-type minioProfiler interface {
-	// Stop the profiler
-	Stop()
-	// Return the path of the profiling file
-	Path() string
-}
-
-// Global profiler to be used by service go-routine.
-var globalProfiler minioProfiler
-
-// dump the request into a string in JSON format.
-func dumpRequest(r *http.Request) string {
-	header := r.Header.Clone()
-	header.Set("Host", r.Host)
-	// Replace all '%' to '%%' so that printer format parser
-	// to ignore URL encoded values.
-	rawURI := strings.Replace(r.RequestURI, "%", "%%", -1)
-	req := struct {
-		Method     string      `json:"method"`
-		RequestURI string      `json:"reqURI"`
-		Header     http.Header `json:"header"`
-	}{r.Method, rawURI, header}
-
-	var buffer bytes.Buffer
-	enc := json.NewEncoder(&buffer)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(&req); err != nil {
-		// Upon error just return Go-syntax representation of the value
-		return fmt.Sprintf("%#v", req)
-	}
-
-	// Formatted string.
-	return strings.TrimSpace(buffer.String())
 }
 
 // isFile - returns whether given path is a file or not.
@@ -389,26 +238,6 @@ func jsonSave(f interface {
 	return nil
 }
 
-// ceilFrac takes a numerator and denominator representing a fraction
-// and returns its ceiling. If denominator is 0, it returns 0 instead
-// of crashing.
-func ceilFrac(numerator, denominator int64) (ceil int64) {
-	if denominator == 0 {
-		// do nothing on invalid input
-		return
-	}
-	// Make denominator positive
-	if denominator < 0 {
-		numerator = -numerator
-		denominator = -denominator
-	}
-	ceil = numerator / denominator
-	if numerator > 0 && numerator%denominator != 0 {
-		ceil++
-	}
-	return
-}
-
 // Returns context with ReqInfo details set in the context.
 func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	bucket, object := request2BucketObjectName(r)
@@ -433,49 +262,4 @@ func restQueries(keys ...string) []string {
 		accumulator = append(accumulator, key, "{"+key+":.*}")
 	}
 	return accumulator
-}
-
-// Reverse the input order of a slice of string
-func reverseStringSlice(input []string) {
-	for left, right := 0, len(input)-1; left < right; left, right = left+1, right-1 {
-		input[left], input[right] = input[right], input[left]
-	}
-}
-
-// lcp finds the longest common prefix of the input strings.
-// It compares by bytes instead of runes (Unicode code points).
-// It's up to the caller to do Unicode normalization if desired
-// (e.g. see golang.org/x/text/unicode/norm).
-func lcp(l []string) string {
-	// Special cases first
-	switch len(l) {
-	case 0:
-		return ""
-	case 1:
-		return l[0]
-	}
-	// LCP of min and max (lexigraphically)
-	// is the LCP of the whole set.
-	min, max := l[0], l[0]
-	for _, s := range l[1:] {
-		switch {
-		case s < min:
-			min = s
-		case s > max:
-			max = s
-		}
-	}
-	for i := 0; i < len(min) && i < len(max); i++ {
-		if min[i] != max[i] {
-			return min[:i]
-		}
-	}
-	// In the case where lengths are not equal but all bytes
-	// are equal, min is the answer ("foo" < "foobar").
-	return min
-}
-
-// Returns the mode in which MinIO is running
-func getMinioMode() string {
-	return globalRadioMode
 }

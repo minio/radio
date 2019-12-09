@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -65,31 +64,6 @@ func radioMain(ctx *cli.Context) {
 type Radio struct {
 	endpoints Endpoints
 	rconfig   radioConfig
-}
-
-const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
-
-// randString generates random names and prepends them with a known prefix.
-func randString(n int, src rand.Source, prefix string) string {
-	b := make([]byte, n)
-	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-	return prefix + string(b[0:30-len(prefix)])
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
@@ -409,7 +383,7 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		defer objectLock.Unlock()
 	}
 
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo) {
 		return ObjectInfo{}, PreConditionFailed{}
 	}
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
@@ -580,7 +554,7 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 	}
 	defer uploadIDLock.Unlock()
 
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo) {
 		return PartInfo{}, PreConditionFailed{}
 	}
 	srcInfo.UserDefined = map[string]string{
