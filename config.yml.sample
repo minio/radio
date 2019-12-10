@@ -1,38 +1,51 @@
+---
+distribute:
+  peers: https://server{1..32}:9000/
+  token: 32bytestring
+cache:
+  drives:
+    - /mnt/cache1
+    - /mnt/cache2
+    - /mnt/cache3
+  exclude:
+    - bucket1/*
+    - "*.db"
+  quota: 90
+  expiry: 30
 mirror:
-- local:
-    bucket: radiobucket1
-    access_key: Q3AM3UQ867SPQQA43P2F
-    secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-  remote:
-  - bucket: bucket1
-    endpoint: http://domain1.com:9001
-    access_key: TX8mIIOGC12QBMJ45F0Z
-    secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket2
-    endpoint: http://domain2.com:9002
-    access_key: GX82IIOGC12QBMJ45F0Z
-    secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket3
-    endpoint: http://domain3.com:9003
-    access_key: HX8KIIOGC12QBMJ45F0Z
-    secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
-
+  - local:
+      access_key: Q3AM3UQ867SPQQA43P2F
+      bucket: radiobucket1
+      secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    remote:
+      - access_key: TX8mIIOGC12QBMJ45F0Z
+        bucket: bucket1
+        endpoint: http://minio-minio1:9000
+        secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
+      - access_key: GX82IIOGC12QBMJ45F0Z
+        bucket: bucket2
+        endpoint: http://minio-minio2:9000
+        secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
+      - access_key: HX8KIIOGC12QBMJ45F0Z
+        bucket: bucket3
+        endpoint: http://minio-minio3:9000
+        secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
 erasure:
-- parity: 1
-  local:
-    bucket: radiobucket1
-    access_key: Q3AM3UQ867SPQQA43P2F
-    secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-  remote:
-  - bucket: bucket1
-    endpoint: http://domain1.com:9001
-    access_key: TX8mIIOGC12QBMJ45F0Z
-    secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket2
-    endpoint: http://domain2.com:9002
-    access_key: GX82IIOGC12QBMJ45F0Z
-    secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket3
-    endpoint: http://domain3.com:9003
-    access_key: HX8KIIOGC12QBMJ45F0Z
-    secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
+  - local:
+      access_key: Q3AM3UQ867SPQQA43P2F
+      bucket: radiobucket1
+      secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    parity: 1
+    remote:
+      - access_key: TX8mIIOGC12QBMJ45F0Z
+        bucket: bucket1
+        endpoint: http://domain1.com:9001
+        secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
+      - access_key: GX82IIOGC12QBMJ45F0Z
+        bucket: bucket2
+        endpoint: http://domain2.com:9002
+        secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
+      - access_key: HX8KIIOGC12QBMJ45F0Z
+        bucket: bucket3
+        endpoint: http://domain3.com:9003
+        secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
