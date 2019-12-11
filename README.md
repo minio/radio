@@ -53,7 +53,7 @@ erasure:
 
 ## Starting `radio`
 ```
-radio server -C config.yml
+radio server -c config.yml
 ```
 
 Prints the following banner
