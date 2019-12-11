@@ -12,35 +12,6 @@ import (
 	minio "github.com/minio/minio-go/v6"
 )
 
-var (
-	// CanonicalizeETag provides canonicalizeETag function alias.
-	CanonicalizeETag = canonicalizeETag
-
-	// MustGetUUID function alias.
-	MustGetUUID = mustGetUUID
-
-	// CleanMetadataKeys provides cleanMetadataKeys function alias.
-	CleanMetadataKeys = cleanMetadataKeys
-
-	// PathJoin function alias.
-	PathJoin = pathJoin
-
-	// IsStringEqual is string equal.
-	IsStringEqual = isStringEqual
-
-	// CreateServerEndpoints function alias.
-	CreateServerEndpoints = createServerEndpoints
-
-	// NewNSLock function alias.
-	NewNSLock = newNSLock
-
-	// NewLockAPI function alias.
-	NewLockAPI = newLockAPI
-
-	// NewDynamicTimeout function alias.
-	NewDynamicTimeout = newDynamicTimeout
-)
-
 // StatInfo -  alias for statInfo
 type StatInfo struct {
 	statInfo

@@ -45,7 +45,7 @@ func radioMain(ctx *cli.Context) {
 	rconfig := radioConfig{}
 	logger.FatalIf(yaml.Unmarshal(data, &rconfig), "Invalid command line arguments")
 
-	endpoints, err := createServerEndpoints(ctx.GlobalString("address"), rconfig.Distribute.Peers)
+	endpoints, err := createServerEndpoints(ctx.String("address"), rconfig.Distribute.Peers)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	if len(endpoints) > 0 {
@@ -130,14 +130,14 @@ type radioConfig struct {
 func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 	var radioLockers = make([]dsync.NetLocker, len(g.endpoints))
 	for i, endpoint := range g.endpoints {
-		radioLockers[i] = NewLockAPI(endpoint)
+		radioLockers[i] = newLockAPI(endpoint)
 	}
 
 	s := radioObjects{
 		multipartUploadIDMap: make(map[string][]string),
 		endpoints:            g.endpoints,
 		radioLockers:         radioLockers,
-		nsMutex:              NewNSLock(len(radioLockers) > 0),
+		nsMutex:              newNSLock(len(radioLockers) > 0),
 		bucketClients:        make(map[string][]remoteS3),
 	}
 
@@ -383,7 +383,7 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Check if this request is only metadata update.
-	cpSrcDstSame := IsStringEqual(PathJoin(srcBucket, srcObject), PathJoin(dstBucket, dstObject))
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if !cpSrcDstSame {
 		objectLock := l.NewNSLock(ctx, dstBucket, dstObject)
 		if err = objectLock.GetLock(globalObjectTimeout); err != nil {
@@ -484,9 +484,9 @@ func (l *radioObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 
 	// Create PutObject options
 	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption}
-	uploadID := MustGetUUID()
+	uploadID := mustGetUUID()
 
-	uploadIDLock := l.NewNSLock(ctx, bucket, PathJoin(object, uploadID))
+	uploadIDLock := l.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return uploadID, err
 	}
@@ -510,7 +510,7 @@ func (l *radioObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object string, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, e error) {
 	data := r.Reader
 
-	uploadIDLock := l.NewNSLock(ctx, bucket, PathJoin(object, uploadID))
+	uploadIDLock := l.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return pi, err
 	}
@@ -557,7 +557,7 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
 	partID int, startOffset, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (p PartInfo, err error) {
 
-	uploadIDLock := l.NewNSLock(ctx, destBucket, PathJoin(destObject, uploadID))
+	uploadIDLock := l.NewNSLock(ctx, destBucket, pathJoin(destObject, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return p, err
 	}
@@ -628,7 +628,7 @@ func (l *radioObjects) ListObjectParts(ctx context.Context, bucket string, objec
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (l *radioObjects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string) error {
-	uploadIDLock := l.NewNSLock(ctx, bucket, PathJoin(object, uploadID))
+	uploadIDLock := l.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -658,7 +658,7 @@ func (l *radioObjects) CompleteMultipartUpload(ctx context.Context, bucket strin
 
 	// Hold read-locks to verify uploaded parts, also disallows
 	// parallel part uploads as well.
-	uploadIDLock := l.NewNSLock(ctx, bucket, PathJoin(object, uploadID))
+	uploadIDLock := l.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
 	if err = uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
 		return oi, err
 	}

@@ -24,7 +24,7 @@ func genLDFlags(version string) string {
 // genReleaseTag prints release tag to the console for easy git tagging.
 func releaseTag(version string) string {
 	relPrefix := "DEVELOPMENT"
-	if prefix := os.Getenv("MINIO_RELEASE"); prefix != "" {
+	if prefix := os.Getenv("RADIO_RELEASE"); prefix != "" {
 		relPrefix = prefix
 	}
 

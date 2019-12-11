@@ -16,12 +16,11 @@ const (
 	MaxUse  = "maxuse"
 	Quota   = "quota"
 
-	EnvCacheDrives              = "MINIO_CACHE_DRIVES"
-	EnvCacheExclude             = "MINIO_CACHE_EXCLUDE"
-	EnvCacheExpiry              = "MINIO_CACHE_EXPIRY"
-	EnvCacheMaxUse              = "MINIO_CACHE_MAXUSE"
-	EnvCacheQuota               = "MINIO_CACHE_QUOTA"
-	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
+	EnvCacheDrives  = "RADIO_CACHE_DRIVES"
+	EnvCacheExclude = "RADIO_CACHE_EXCLUDE"
+	EnvCacheExpiry  = "RADIO_CACHE_EXPIRY"
+	EnvCacheMaxUse  = "RADIO_CACHE_MAXUSE"
+	EnvCacheQuota   = "RADIO_CACHE_QUOTA"
 
 	DefaultExpiry = "90"
 	DefaultQuota  = "80"

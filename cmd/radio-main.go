@@ -92,8 +92,19 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
+	if globalCacheConfig.Enabled {
+		// initialize the new disk cache objects.
+		var cacheAPI CacheObjectLayer
+		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+
+		globalObjLayerMutex.Lock()
+		globalCacheObjectAPI = cacheAPI
+		globalObjLayerMutex.Unlock()
+	}
+
 	// Override any values from ENVs.
-	if err := lookupConfigEnv(); err != nil {
+	if err := lookupConfigEnv(radio.rconfig); err != nil {
 		logger.FatalIf(err, "Unable to initialize server config")
 	}
 
@@ -150,19 +161,8 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	globalObjLayerMutex.Unlock()
 
 	// This is only to uniquely identify each radio deployments.
-	globalDeploymentID = env.Get("MINIO_RADIO_DEPLOYMENT_ID", mustGetUUID())
+	globalDeploymentID = env.Get("RADIO_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
-
-	if globalCacheConfig.Enabled {
-		// initialize the new disk cache objects.
-		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
-
-		globalObjLayerMutex.Lock()
-		globalCacheObjectAPI = cacheAPI
-		globalObjLayerMutex.Unlock()
-	}
 
 	// Prints the formatted startup message once object layer is initialized.
 	if !globalCLIContext.Quiet {

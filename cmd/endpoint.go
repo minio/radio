@@ -121,9 +121,6 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		// As this is path in the URL, we should use path package, not filepath package.
 		// On MS Windows, filepath.Clean() converts into Windows path style ie `/foo` becomes `\foo`
 		u.Path = path.Clean(u.Path)
-		if isEmptyPath(u.Path) {
-			return ep, fmt.Errorf("empty or root path is not supported in URL endpoint")
-		}
 
 		// On windows having a preceding SlashSeparator will cause problems, if the
 		// command line already has C:/<export-folder/ in it. Final resulting

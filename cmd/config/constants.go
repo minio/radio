@@ -7,6 +7,6 @@ const (
 
 // Top level common ENVs
 const (
-	EnvRegionName = "MINIO_REGION_NAME"
-	EnvRegion     = "MINIO_REGION" // legacy
+	EnvRegionName = "RADIO_REGION_NAME"
+	EnvRegion     = "RADIO_REGION" // legacy
 )
