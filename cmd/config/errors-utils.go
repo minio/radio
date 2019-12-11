@@ -3,8 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"syscall"
 
 	"github.com/minio/minio/pkg/color"
@@ -71,10 +69,6 @@ func ErrorToErr(err error) Err {
 		return ErrPortAlreadyInUse(err).Msg("Specified port is already in use")
 	} else if errors.Is(err, syscall.EACCES) {
 		return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
-	} else if os.IsPermission(err) {
-		return ErrNoPermissionsToAccessDirFiles(err).Msg("Insufficient permissions to access path")
-	} else if errors.Is(err, io.ErrUnexpectedEOF) {
-		return ErrUnexpectedDataContent(err)
 	} else {
 		// Failed to identify what type of error this, return a simple UI error
 		return Err{msg: err.Error()}

@@ -13,11 +13,6 @@ import (
 
 // GlobalFlags - global flags for minio.
 var GlobalFlags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "certs-dir, S",
-		Value: defaultCertsDir.Get(),
-		Usage: "path to certs directory",
-	},
 	cli.BoolFlag{
 		Name:  "quiet",
 		Usage: "disable startup information",

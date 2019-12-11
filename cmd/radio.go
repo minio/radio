@@ -45,18 +45,13 @@ func radioMain(ctx *cli.Context) {
 	rconfig := radioConfig{}
 	logger.FatalIf(yaml.Unmarshal(data, &rconfig), "Invalid command line arguments")
 
-	if ctx.Args().Present() {
-		endpointZones, err := CreateServerEndpoints(ctx.GlobalString("address"), ctx.Args()...)
-		logger.FatalIf(err, "Invalid command line arguments")
+	endpoints, err := createServerEndpoints(ctx.GlobalString("address"), rconfig.Distribute.Peers)
+	logger.FatalIf(err, "Invalid command line arguments")
 
-		if len(endpointZones) > 1 {
-			logger.FatalIf(errors.New("too many arguments"), "Invalid command line arguments")
-		}
-
-		// Start the radio..
-		StartRadio(ctx, &Radio{endpoints: endpointZones[0].Endpoints, rconfig: rconfig})
+	if len(endpoints) > 0 {
+		startRadio(ctx, &Radio{endpoints: endpoints, rconfig: rconfig})
 	} else {
-		StartRadio(ctx, &Radio{rconfig: rconfig})
+		startRadio(ctx, &Radio{rconfig: rconfig})
 	}
 }
 
@@ -105,6 +100,21 @@ type bucketConfig struct {
 
 // radioConfig radio configuration
 type radioConfig struct {
+	Distribute struct {
+		Peers string `yaml:"peers"`
+		Token string `yaml:"token"`
+		Certs struct {
+			CertFile string `yaml:"cert_file"`
+			KeyFile  string `yaml:"key_file"`
+			CAPath   string `yaml:"ca_path"`
+		} `yaml:"certs"`
+	} `yaml:"distribute"`
+	Cache struct {
+		Drives  []string `yaml:"drives"`
+		Exclude []string `yaml:"exclude"`
+		Quota   int      `yaml:"quota"`
+		Expiry  int      `yaml:"expiry"`
+	} `yaml:"cache"`
 	Mirror []struct {
 		Local  bucketConfig   `yaml:"local"`
 		Remote []bucketConfig `yaml:"remote"`
@@ -114,7 +124,6 @@ type radioConfig struct {
 		Local  bucketConfig   `yaml:"local"`
 		Remote []bucketConfig `yaml:"remote"`
 	} `yaml:"erasure"`
-	// Future erasure
 }
 
 // NewRadioLayer returns s3 ObjectLayer.

@@ -12,7 +12,8 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/set"
-	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/ellipses"
+	"github.com/minio/radio/cmd/config"
 )
 
 // EndpointType - enum for endpoint type.
@@ -310,8 +311,8 @@ func NewEndpoints(args ...string) (endpoints Endpoints, err error) {
 	return endpoints, nil
 }
 
-// CreateEndpoints - validates and creates new endpoints for given args.
-func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, error) {
+// createEndpoints - validates and creates new endpoints for given args.
+func createEndpoints(serverAddr string, args ...string) (Endpoints, error) {
 	var endpoints Endpoints
 	var err error
 
@@ -321,28 +322,17 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, error) {
 	}
 
 	_, serverAddrPort := mustSplitHostPort(serverAddr)
-
-	for i, iargs := range args {
-		// Convert args to endpoints
-		var newEndpoints Endpoints
-		eps, err := NewEndpoints(iargs...)
-		if err != nil {
-			return endpoints, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
-		}
-
-		for _, ep := range eps {
-			ep.SetIndex = i
-			newEndpoints = append(newEndpoints, ep)
-		}
-		endpoints = append(endpoints, newEndpoints...)
+	// Convert args to endpoints
+	endpoints, err = NewEndpoints(args...)
+	if err != nil {
+		return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg(err.Error())
 	}
-
 	if len(endpoints) == 0 {
-		return endpoints, config.ErrInvalidErasureEndpoints(nil).Msg("invalid number of endpoints")
+		return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg("invalid number of endpoints")
 	}
 
 	if err = endpoints.UpdateIsLocal(); err != nil {
-		return endpoints, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
+		return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg(err.Error())
 	}
 
 	// Here all endpoints are URL style.
@@ -375,7 +365,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, error) {
 			hostIPSet, _ := getHostIP(host)
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {
-					return endpoints, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
+					return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
 				}
 				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
 			} else {
@@ -392,7 +382,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, error) {
 				continue
 			}
 			if localPathSet.Contains(endpoint.Path) {
-				return endpoints, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
+				return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
 			}
 			localPathSet.Add(endpoint.Path)
 		}
@@ -403,7 +393,7 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, error) {
 		// If all endpoints have same port number, then this is XL setup using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
-				return endpoints, config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
+				return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
 			return endpoints, nil
 		}
@@ -435,4 +425,38 @@ func CreateEndpoints(serverAddr string, args ...[]string) (Endpoints, error) {
 	}
 
 	return endpoints, nil
+}
+
+// Parses all arguments and returns an endpointSet which is a collection
+// of endpoints following the ellipses pattern, this is what is used
+// by the object layer for initializing itself.
+func parseEndpoint(peers string) (endpoints []string, err error) {
+	patterns, perr := ellipses.FindEllipsesPatterns(peers)
+	if perr != nil {
+		return nil, config.ErrInvalidRadioEndpoints(nil).Msg(perr.Error())
+	}
+	for _, lbls := range patterns.Expand() {
+		endpoints = append(endpoints, strings.Join(lbls, ""))
+	}
+	return endpoints, nil
+}
+
+// CreateServerEndpoints - validates and creates new endpoints from input args, supports
+// both ellipses and without ellipses transparently.
+func createServerEndpoints(serverAddr string, peers string) (Endpoints, error) {
+	if len(peers) == 0 {
+		return nil, nil
+	}
+
+	if !ellipses.HasEllipses(peers) {
+		return nil, config.ErrInvalidRadioEndpoints(nil).Msg(fmt.Sprintf("Input args (%s) must have ellipses",
+			peers))
+	}
+
+	eps, err := parseEndpoint(peers)
+	if err != nil {
+		return nil, err
+	}
+
+	return createEndpoints(serverAddr, eps...)
 }

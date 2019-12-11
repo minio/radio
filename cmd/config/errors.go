@@ -4,38 +4,26 @@ package config
 var (
 	ErrInvalidCacheDrivesValue = newErrFn(
 		"Invalid cache drive value",
-		"Please check the value in this ENV variable",
-		"MINIO_CACHE_DRIVES: Mounted drives or directories are delimited by `,`",
+		"Please check the value in your config.yml",
+		"Mounted drives or directories are wrong",
 	)
 
 	ErrInvalidCacheExcludesValue = newErrFn(
 		"Invalid cache excludes value",
-		"Please check the passed value",
-		"MINIO_CACHE_EXCLUDE: Cache exclusion patterns are delimited by `,`",
+		"Please check the passed value in your config.yml",
+		"Cache exclusion patterns are incorrect please refer to documentation",
 	)
 
 	ErrInvalidCacheExpiryValue = newErrFn(
 		"Invalid cache expiry value",
-		"Please check the passed value",
-		"MINIO_CACHE_EXPIRY: Valid cache expiry duration must be in days",
+		"Please check the passed value in your config.yml",
+		"Valid cache expiry duration must be in days",
 	)
 
 	ErrInvalidCacheQuota = newErrFn(
 		"Invalid cache quota value",
-		"Please check the passed value",
-		"MINIO_CACHE_QUOTA: Valid cache quota value must be between 0-100",
-	)
-
-	ErrInvalidCacheEncryptionKey = newErrFn(
-		"Invalid cache encryption master key value",
-		"Please check the passed value",
-		"MINIO_CACHE_ENCRYPTION_MASTER_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
-	)
-
-	ErrUnexpectedBackendVersion = newErrFn(
-		"Backend version seems to be too recent",
-		"Please update to the latest MinIO version",
-		"",
+		"Please check the passed value in your config.yml",
+		" Valid cache quota value must be between 0-100",
 	)
 
 	ErrInvalidAddressFlag = newErrFn(
@@ -47,12 +35,6 @@ var (
 		  --address '[fe80::da00:a6c8:e3ae:ddd7]:9000'`,
 	)
 
-	ErrUnableToWriteInBackend = newErrFn(
-		"Unable to write to the backend",
-		"Please ensure MinIO binary has write permissions for the backend",
-		`Verify if MinIO binary is running as the same user who has write permissions for the backend`,
-	)
-
 	ErrPortAlreadyInUse = newErrFn(
 		"Port is already in use",
 		"Please ensure no other program uses the same address/port",
@@ -61,14 +43,8 @@ var (
 
 	ErrPortAccess = newErrFn(
 		"Unable to use specified port",
-		"Please ensure MinIO binary has 'cap_net_bind_service=+ep' permissions",
-		`Use 'sudo setcap cap_net_bind_service=+ep /path/to/minio' to provide sufficient permissions`,
-	)
-
-	ErrNoPermissionsToAccessDirFiles = newErrFn(
-		"Missing permissions to access the specified path",
-		"Please ensure the specified path can be accessed",
-		"",
+		"Please ensure Radio binary has 'cap_net_bind_service=+ep' permissions",
+		`Use 'sudo setcap cap_net_bind_service=+ep /path/to/radio' to provide sufficient permissions`,
 	)
 
 	ErrSSLUnexpectedError = newErrFn(
@@ -85,7 +61,7 @@ var (
 
 	ErrSSLNoPassword = newErrFn(
 		"Missing TLS password",
-		"Please set the password to environment variable `MINIO_CERT_PASSWD` so that the private key can be decrypted",
+		"Please set the password to environment variable `RADIO_CERT_PASSWD` so that the private key can be decrypted",
 		"",
 	)
 
@@ -103,19 +79,13 @@ var (
 
 	ErrSSLWrongPassword = newErrFn(
 		"Unable to decrypt the private key using the provided password",
-		"Please set the correct password in environment variable `MINIO_CERT_PASSWD`",
+		"Please set the correct password in environment variable `RADIO_CERT_PASSWD`",
 		"",
 	)
 
-	ErrUnexpectedDataContent = newErrFn(
-		"Unexpected data content",
-		"Please contact MinIO at https://slack.min.io",
-		"",
-	)
-
-	ErrUnexpectedError = newErrFn(
-		"Unexpected error",
-		"Please contact MinIO at https://slack.min.io",
-		"",
+	ErrInvalidRadioEndpoints = newErrFn(
+		"Unable to initialize endpoint(s)",
+		"Please check the specified value in your config.yml",
+		"Please provide correct combination of remote servers",
 	)
 )

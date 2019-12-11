@@ -1,7 +1,11 @@
 ---
 distribute:
-  peers: https://server{1..32}:9000/
+  peers: https://server{1...32}:9000/
   token: 32bytestring
+  certs:
+    cert_file: /etc/certs/public.crt
+    key_file: /etc/certs/private.key
+    ca_path: /etc/certs/CAs
 cache:
   drives:
     - /mnt/cache1
