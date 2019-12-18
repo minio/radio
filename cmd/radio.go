@@ -126,11 +126,26 @@ type radioConfig struct {
 	} `yaml:"erasure"`
 }
 
+func newBucketClients(bcfgs []bucketConfig) ([]bucketClient, error) {
+	var clnts []bucketClient
+	for _, bCfg := range bcfgs {
+		clnt, err := newS3(bCfg.Bucket, bCfg.Endpoint, bCfg.AccessKey, bCfg.SecretKey, bCfg.SessionToken)
+		if err != nil {
+			return nil, err
+		}
+		clnts = append(clnts, bucketClient{
+			Core:   clnt,
+			Bucket: bCfg.Bucket,
+		})
+	}
+	return clnts, nil
+}
+
 // NewRadioLayer returns s3 ObjectLayer.
 func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
-	var radioLockers = make([]dsync.NetLocker, len(g.endpoints))
-	for i, endpoint := range g.endpoints {
-		radioLockers[i] = newLockAPI(endpoint)
+	var radioLockers []dsync.NetLocker
+	for _, endpoint := range g.endpoints {
+		radioLockers = append(radioLockers, newLockAPI(endpoint))
 	}
 
 	s := radioObjects{
@@ -138,20 +153,28 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 		endpoints:            g.endpoints,
 		radioLockers:         radioLockers,
 		nsMutex:              newNSLock(len(radioLockers) > 0),
-		bucketClients:        make(map[string][]remoteS3),
+		mirrorClients:        make(map[string]mirrorConfig),
+		erasureClients:       make(map[string]erasureConfig),
 	}
 
 	// creds are ignored here, since S3 radio implements chaining all credentials.
 	for _, remotes := range g.rconfig.Mirror {
-		for _, bCfg := range remotes.Remote {
-			clnt, err := newS3(bCfg.Bucket, bCfg.Endpoint, bCfg.AccessKey, bCfg.SecretKey, bCfg.SessionToken)
-			if err != nil {
-				return nil, err
-			}
-			s.bucketClients[remotes.Local.Bucket] = append(s.bucketClients[remotes.Local.Bucket], remoteS3{
-				Core:   clnt,
-				Bucket: bCfg.Bucket,
-			})
+		clnts, err := newBucketClients(remotes.Remote)
+		if err != nil {
+			return nil, err
+		}
+		s.mirrorClients[remotes.Local.Bucket] = mirrorConfig{
+			clnts: clnts,
+		}
+	}
+	for _, remotes := range g.rconfig.Erasure {
+		clnts, err := newBucketClients(remotes.Remote)
+		if err != nil {
+			return nil, err
+		}
+		s.erasureClients[remotes.Local.Bucket] = erasureConfig{
+			parity: remotes.Parity,
+			clnts:  clnts,
 		}
 	}
 	return &s, nil
@@ -162,16 +185,26 @@ func (g *Radio) Production() bool {
 	return true
 }
 
-type remoteS3 struct {
+type bucketClient struct {
 	*miniogo.Core
 	Bucket string
+}
+
+type mirrorConfig struct {
+	clnts []bucketClient
+}
+
+type erasureConfig struct {
+	parity int
+	clnts  []bucketClient
 }
 
 // radioObjects implements radio for MinIO and S3 compatible object storage servers.
 type radioObjects struct {
 	endpoints            Endpoints
 	radioLockers         []dsync.NetLocker
-	bucketClients        map[string][]remoteS3
+	mirrorClients        map[string]mirrorConfig
+	erasureClients       map[string]erasureConfig
 	multipartUploadIDMap map[string][]string
 	nsMutex              *NSLockMap
 }
@@ -184,7 +217,7 @@ func (l *radioObjects) NewNSLock(ctx context.Context, bucket string, object stri
 
 // GetBucketInfo gets bucket metadata..
 func (l *radioObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	_, ok := l.bucketClients[bucket]
+	_, ok := l.mirrorClients[bucket]
 	if !ok {
 		return bi, BucketNotFound{Bucket: bucket}
 	}
@@ -197,7 +230,7 @@ func (l *radioObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Buc
 // ListBuckets lists all S3 buckets
 func (l *radioObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 	var b []BucketInfo
-	for bucket := range l.bucketClients {
+	for bucket := range l.mirrorClients {
 		b = append(b, BucketInfo{
 			Name:    bucket,
 			Created: time.Now().UTC(),
@@ -208,8 +241,13 @@ func (l *radioObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 
 // ListObjects lists all blobs in S3 bucket filtered by prefix
 func (l *radioObjects) ListObjects(ctx context.Context, bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	rs3 := l.bucketClients[bucket][0]
-	result, err := rs3.ListObjects(rs3.Bucket, prefix, marker, delimiter, maxKeys)
+	rs3, ok := l.mirrorClients[bucket]
+	if !ok {
+		return loi, BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+	result, err := rs3.clnts[0].ListObjects(rs3.clnts[0].Bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return loi, ErrorRespToObjectError(err, bucket)
 	}
@@ -219,8 +257,14 @@ func (l *radioObjects) ListObjects(ctx context.Context, bucket string, prefix st
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (l *radioObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi ListObjectsV2Info, e error) {
-	rs3 := l.bucketClients[bucket][0]
-	result, err := rs3.ListObjectsV2(rs3.Bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
+	rs3, ok := l.mirrorClients[bucket]
+	if !ok {
+		return loi, BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+	result, err := rs3.clnts[0].ListObjectsV2(rs3.clnts[0].Bucket, prefix,
+		continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
 	if err != nil {
 		return loi, ErrorRespToObjectError(err, bucket)
 	}
@@ -299,8 +343,12 @@ func (l *radioObjects) GetObject(ctx context.Context, bucket string, object stri
 			return ErrorRespToObjectError(err, bucket, object)
 		}
 	}
-	rs3 := l.bucketClients[bucket][0]
-	reader, _, _, err := rs3.GetObject(rs3.Bucket, object, opts)
+	rs3, ok := l.mirrorClients[bucket]
+	if !ok {
+		return BucketNotFound{Bucket: bucket}
+	}
+
+	reader, _, _, err := rs3.clnts[0].GetObject(rs3.clnts[0].Bucket, object, opts)
 	if err != nil {
 		return ErrorRespToObjectError(err, bucket, object)
 	}
@@ -322,8 +370,13 @@ func (l *radioObjects) GetObjectInfo(ctx context.Context, bucket string, object 
 	}
 	defer objectLock.RUnlock()
 
-	rs3 := l.bucketClients[bucket][0]
-	oi, err := rs3.StatObject(rs3.Bucket, object, miniogo.StatObjectOptions{
+	rs3, ok := l.mirrorClients[bucket]
+	if !ok {
+		return ObjectInfo{}, BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+	oi, err := rs3.clnts[0].StatObject(rs3.clnts[0].Bucket, object, miniogo.StatObjectOptions{
 		GetObjectOptions: miniogo.GetObjectOptions{
 			ServerSideEncryption: opts.ServerSideEncryption,
 		},
@@ -346,20 +399,24 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 	}
 	defer objectLock.Unlock()
 
-	rs3s := l.bucketClients[bucket]
+	rs3s, ok := l.mirrorClients[bucket]
+	if !ok {
+		return objInfo, BucketNotFound{Bucket: bucket}
+	}
 
-	readers, err := streamdup.New(data, len(rs3s))
+	readers, err := streamdup.New(data, len(rs3s.clnts))
 	if err != nil {
 		return objInfo, ErrorRespToObjectError(err, bucket, object)
 	}
 
-	oinfos := make([]miniogo.ObjectInfo, len(rs3s))
-	g := errgroup.WithNErrs(len(rs3s))
-	for index := range rs3s {
+	oinfos := make([]miniogo.ObjectInfo, len(rs3s.clnts))
+	g := errgroup.WithNErrs(len(rs3s.clnts))
+	for index := range rs3s.clnts {
 		index := index
 		g.Go(func() error {
 			var perr error
-			oinfos[index], perr = rs3s[index].PutObject(rs3s[index].Bucket, object, readers[index], data.Size(),
+			oinfos[index], perr = rs3s.clnts[index].PutObject(rs3s.clnts[index].Bucket, object,
+				readers[index], data.Size(),
 				data.MD5Base64String(), data.SHA256HexString(),
 				ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
 			return perr
@@ -413,13 +470,13 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		srcInfo.UserDefined[k] = v[0]
 	}
 
-	rs3sSrc := l.bucketClients[srcBucket]
-	rs3sDest := l.bucketClients[dstBucket]
-	if len(rs3sSrc) != len(rs3sDest) {
+	rs3sSrc := l.mirrorClients[srcBucket]
+	rs3sDest := l.mirrorClients[dstBucket]
+	if len(rs3sSrc.clnts) != len(rs3sDest.clnts) {
 		return objInfo, errors.New("unexpected")
 	}
 
-	n := len(rs3sDest)
+	n := len(rs3sDest.clnts)
 	oinfos := make([]miniogo.ObjectInfo, n)
 
 	g := errgroup.WithNErrs(n)
@@ -427,8 +484,8 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		index := index
 		g.Go(func() error {
 			var err error
-			oinfos[index], err = rs3sSrc[index].CopyObject(rs3sSrc[index].Bucket, srcObject,
-				rs3sDest[index].Bucket, dstObject, srcInfo.UserDefined)
+			oinfos[index], err = rs3sSrc.clnts[index].CopyObject(rs3sSrc.clnts[index].Bucket, srcObject,
+				rs3sDest.clnts[index].Bucket, dstObject, srcInfo.UserDefined)
 			return err
 		}, index)
 	}
@@ -450,8 +507,13 @@ func (l *radioObjects) DeleteObject(ctx context.Context, bucket string, object s
 	}
 	defer objectLock.Unlock()
 
-	rs3s := l.bucketClients[bucket]
-	for _, clnt := range rs3s {
+	rs3s, ok := l.mirrorClients[bucket]
+	if !ok {
+		return BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+	for _, clnt := range rs3s.clnts {
 		if err := clnt.RemoveObject(clnt.Bucket, object); err != nil {
 			return ErrorRespToObjectError(err, bucket, object)
 		}
@@ -470,8 +532,13 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 
 // ListMultipartUploads lists all multipart uploads.
 func (l *radioObjects) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
-	rs3 := l.bucketClients[bucket][0]
-	result, err := rs3.ListMultipartUploads(rs3.Bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	rs3, ok := l.mirrorClients[bucket]
+	if !ok {
+		return lmi, BucketNotFound{Bucket: bucket}
+	}
+
+	result, err := rs3.clnts[0].ListMultipartUploads(rs3.clnts[0].Bucket, prefix,
+		keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		return lmi, err
 	}
@@ -492,8 +559,12 @@ func (l *radioObjects) NewMultipartUpload(ctx context.Context, bucket string, ob
 	}
 	defer uploadIDLock.Unlock()
 
-	rs3s := l.bucketClients[bucket]
-	for _, clnt := range rs3s {
+	rs3s, ok := l.mirrorClients[bucket]
+	if !ok {
+		return uploadID, BucketNotFound{Bucket: bucket}
+	}
+
+	for _, clnt := range rs3s.clnts {
 		id, err := clnt.NewMultipartUpload(clnt.Bucket, object, opts)
 		if err != nil {
 			// Abort any failed uploads to one of the radios
@@ -525,20 +596,22 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 		}
 	}
 
-	rs3s := l.bucketClients[bucket]
+	rs3s := l.mirrorClients[bucket]
 
-	readers, err := streamdup.New(data, len(rs3s))
+	readers, err := streamdup.New(data, len(rs3s.clnts))
 	if err != nil {
 		return pi, err
 	}
 
-	pinfos := make([]miniogo.ObjectPart, len(rs3s))
-	g := errgroup.WithNErrs(len(rs3s))
-	for index := range rs3s {
+	pinfos := make([]miniogo.ObjectPart, len(rs3s.clnts))
+	g := errgroup.WithNErrs(len(rs3s.clnts))
+	for index := range rs3s.clnts {
 		index := index
 		g.Go(func() error {
 			var err error
-			pinfos[index], err = rs3s[index].PutObjectPart(rs3s[index].Bucket, object, uploadIDs[index], partID, readers[index], data.Size(), data.MD5Base64String(), data.SHA256HexString(), opts.ServerSideEncryption)
+			pinfos[index], err = rs3s.clnts[index].PutObjectPart(rs3s.clnts[index].Bucket, object,
+				uploadIDs[index], partID, readers[index], data.Size(),
+				data.MD5Base64String(), data.SHA256HexString(), opts.ServerSideEncryption)
 			return err
 		}, index)
 	}
@@ -590,14 +663,14 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 		}
 	}
 
-	rs3sSrc := l.bucketClients[srcBucket]
-	rs3sDest := l.bucketClients[destBucket]
+	rs3sSrc := l.mirrorClients[srcBucket]
+	rs3sDest := l.mirrorClients[destBucket]
 
-	if len(rs3sSrc) != len(rs3sDest) {
+	if len(rs3sSrc.clnts) != len(rs3sDest.clnts) {
 		return p, errors.New("unexpected")
 	}
 
-	n := len(rs3sDest)
+	n := len(rs3sDest.clnts)
 	pinfos := make([]miniogo.CompletePart, n)
 
 	g := errgroup.WithNErrs(n)
@@ -605,7 +678,8 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 		index := index
 		g.Go(func() error {
 			var err error
-			pinfos[index], err = rs3sSrc[index].CopyObjectPart(rs3sSrc[index].Bucket, srcObject, rs3sDest[index].Bucket, destObject,
+			pinfos[index], err = rs3sSrc.clnts[index].CopyObjectPart(rs3sSrc.clnts[index].Bucket,
+				srcObject, rs3sDest.clnts[index].Bucket, destObject,
 				uploadIDs[index], partID, startOffset, length, srcInfo.UserDefined)
 			return err
 		}, index)
@@ -643,9 +717,9 @@ func (l *radioObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 		}
 	}
 
-	rs3s := l.bucketClients[bucket]
+	rs3s := l.mirrorClients[bucket]
 	for index, id := range uploadIDs {
-		if err := rs3s[index].AbortMultipartUpload(rs3s[index].Bucket, object, id); err != nil {
+		if err := rs3s.clnts[index].AbortMultipartUpload(rs3s.clnts[index].Bucket, object, id); err != nil {
 			return ErrorRespToObjectError(err, bucket, object)
 		}
 	}
@@ -681,11 +755,11 @@ func (l *radioObjects) CompleteMultipartUpload(ctx context.Context, bucket strin
 		}
 	}
 
-	rs3s := l.bucketClients[bucket]
+	rs3s := l.mirrorClients[bucket]
 	var etag string
 	for index, id := range uploadIDs {
-		etag, err = rs3s[index].CompleteMultipartUpload(rs3s[index].Bucket, object, id,
-			ToMinioClientCompleteParts(uploadedParts))
+		etag, err = rs3s.clnts[index].CompleteMultipartUpload(rs3s.clnts[index].Bucket,
+			object, id, ToMinioClientCompleteParts(uploadedParts))
 		if err != nil {
 			return oi, ErrorRespToObjectError(err, bucket, object)
 		}
