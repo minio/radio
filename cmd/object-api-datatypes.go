@@ -73,6 +73,10 @@ type ObjectInfo struct {
 
 	metadataOnly bool
 
+	// ReplicaIndex provides guidance for the caller
+	// about the object and its actual location at the backend
+	ReplicaIndex int
+
 	// Date and time when the object was last accessed.
 	AccTime time.Time
 }

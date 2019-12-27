@@ -126,7 +126,7 @@ func FromMinioClientListMultipartsInfo(lmur minio.ListMultipartUploadsResult) Li
 }
 
 // FromMinioClientObjectInfo converts minio ObjectInfo to radio ObjectInfo
-func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
+func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo, replicaIdx int) ObjectInfo {
 	userDefined := FromMinioClientMetadata(oi.Metadata)
 	userDefined[xhttp.ContentType] = oi.ContentType
 
@@ -141,6 +141,7 @@ func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 		ContentEncoding: oi.Metadata.Get(xhttp.ContentEncoding),
 		StorageClass:    oi.StorageClass,
 		Expires:         oi.Expires,
+		ReplicaIndex:    replicaIdx,
 	}
 }
 
@@ -149,7 +150,7 @@ func FromMinioClientListBucketV2Result(bucket string, result minio.ListBucketV2R
 	objects := make([]ObjectInfo, len(result.Contents))
 
 	for i, oi := range result.Contents {
-		objects[i] = FromMinioClientObjectInfo(bucket, oi)
+		objects[i] = FromMinioClientObjectInfo(bucket, oi, 0)
 	}
 
 	prefixes := make([]string, len(result.CommonPrefixes))
@@ -172,7 +173,7 @@ func FromMinioClientListBucketResult(bucket string, result minio.ListBucketResul
 	objects := make([]ObjectInfo, len(result.Contents))
 
 	for i, oi := range result.Contents {
-		objects[i] = FromMinioClientObjectInfo(bucket, oi)
+		objects[i] = FromMinioClientObjectInfo(bucket, oi, 0)
 	}
 
 	prefixes := make([]string, len(result.CommonPrefixes))
@@ -193,7 +194,7 @@ func FromMinioClientListBucketResultToV2Info(bucket string, result minio.ListBuc
 	objects := make([]ObjectInfo, len(result.Contents))
 
 	for i, oi := range result.Contents {
-		objects[i] = FromMinioClientObjectInfo(bucket, oi)
+		objects[i] = FromMinioClientObjectInfo(bucket, oi, 0)
 	}
 
 	prefixes := make([]string, len(result.CommonPrefixes))

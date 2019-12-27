@@ -273,7 +273,7 @@ func (l *radioObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *radioObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (l *radioObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, o ObjectOptions) (gr *GetObjectReader, err error) {
 	var nsUnlocker = func() {}
 
 	// Acquire lock
@@ -293,28 +293,50 @@ func (l *radioObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		}
 	}
 
-	var objInfo ObjectInfo
-	objInfo, err = l.GetObjectInfo(ctx, bucket, object, opts)
+	rs3s, ok := l.mirrorClients[bucket]
+	if !ok {
+		return nil, BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+
+	info, err := l.getObjectInfo(ctx, bucket, object, o)
 	if err != nil {
 		return nil, ErrorRespToObjectError(err, bucket, object)
 	}
 
-	var startOffset, length int64
-	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
+	startOffset, length, err := rs.GetOffsetLength(info.Size)
 	if err != nil {
 		return nil, ErrorRespToObjectError(err, bucket, object)
 	}
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
-		pw.CloseWithError(err)
+		opts := miniogo.GetObjectOptions{}
+		opts.ServerSideEncryption = o.ServerSideEncryption
+
+		if startOffset >= 0 && length >= 0 {
+			if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
+				pw.CloseWithError(ErrorRespToObjectError(err, bucket, object))
+				return
+			}
+		}
+
+		reader, _, _, err := rs3s.clnts[info.ReplicaIndex].GetObject(rs3s.clnts[info.ReplicaIndex].Bucket, object, opts)
+		if err != nil {
+			pw.CloseWithError(ErrorRespToObjectError(err, bucket, object))
+			return
+		}
+		defer reader.Close()
+
+		_, err = io.Copy(pw, reader)
+		pw.CloseWithError(ErrorRespToObjectError(err, bucket, object))
 	}()
 
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser, nsUnlocker)
+	return NewGetObjectReaderFromReader(pr, info, o.CheckCopyPrecondFn, pipeCloser, nsUnlocker)
 }
 
 // GetObject reads an object from S3. Supports additional
@@ -324,41 +346,77 @@ func (l *radioObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (l *radioObjects) GetObject(ctx context.Context, bucket string, object string, startOffset int64, length int64, writer io.Writer, etag string, o ObjectOptions) error {
-	// Lock the object before reading.
-	objectLock := l.NewNSLock(ctx, bucket, object)
-	if err := objectLock.GetRLock(globalObjectTimeout); err != nil {
-		return err
-	}
-	defer objectLock.RUnlock()
+	return NotImplemented{}
+}
 
-	if length < 0 && length != -1 {
-		return ErrorRespToObjectError(InvalidRange{}, bucket, object)
-	}
-
-	opts := miniogo.GetObjectOptions{}
-	opts.ServerSideEncryption = o.ServerSideEncryption
-
-	if startOffset >= 0 && length >= 0 {
-		if err := opts.SetRange(startOffset, startOffset+length-1); err != nil {
-			return ErrorRespToObjectError(err, bucket, object)
+func quorumInfo(infos []miniogo.ObjectInfo) (miniogo.ObjectInfo, int, error) {
+	tagCounter := map[string]int{}
+	for _, info := range infos {
+		uuid := info.Metadata.Get("x-amz-meta-radio-tag")
+		_, ok := tagCounter[uuid]
+		if !ok {
+			tagCounter[uuid] = 1
+		} else {
+			tagCounter[uuid]++
 		}
 	}
-	rs3, ok := l.mirrorClients[bucket]
+	var maximalUUID string
+	for uuid, count := range tagCounter {
+		if count > len(infos)/2+1 {
+			maximalUUID = uuid
+			break
+		}
+	}
+	if maximalUUID == "" {
+		return miniogo.ObjectInfo{}, -1, InsufficientReadQuorum{}
+	}
+
+	var info miniogo.ObjectInfo
+	var index int
+	for index, info = range infos {
+		uuid := info.Metadata.Get("x-amz-meta-radio-tag")
+		if uuid != maximalUUID {
+			continue
+		}
+		break
+	}
+	return info, index, nil
+}
+
+func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	rs3s, ok := l.mirrorClients[bucket]
 	if !ok {
-		return BucketNotFound{Bucket: bucket}
+		return ObjectInfo{}, BucketNotFound{
+			Bucket: bucket,
+		}
 	}
 
-	reader, _, _, err := rs3.clnts[0].GetObject(rs3.clnts[0].Bucket, object, opts)
+	oinfos := make([]miniogo.ObjectInfo, len(rs3s.clnts))
+	g := errgroup.WithNErrs(len(rs3s.clnts))
+	for index := range rs3s.clnts {
+		index := index
+		g.Go(func() error {
+			var perr error
+			oinfos[index], perr = rs3s.clnts[index].StatObject(rs3s.clnts[index].Bucket,
+				object, miniogo.StatObjectOptions{
+					GetObjectOptions: miniogo.GetObjectOptions{
+						ServerSideEncryption: opts.ServerSideEncryption,
+					},
+				})
+			return perr
+		}, index)
+	}
+
+	if maxErr := reduceReadQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1); maxErr != nil {
+		return ObjectInfo{}, maxErr
+	}
+
+	info, rindex, err := quorumInfo(oinfos)
 	if err != nil {
-		return ErrorRespToObjectError(err, bucket, object)
-	}
-	defer reader.Close()
-
-	if _, err = io.Copy(writer, reader); err != nil {
-		return ErrorRespToObjectError(err, bucket, object)
+		return ObjectInfo{}, ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return nil
+	return FromMinioClientObjectInfo(bucket, info, rindex), nil
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
@@ -370,22 +428,7 @@ func (l *radioObjects) GetObjectInfo(ctx context.Context, bucket string, object 
 	}
 	defer objectLock.RUnlock()
 
-	rs3, ok := l.mirrorClients[bucket]
-	if !ok {
-		return ObjectInfo{}, BucketNotFound{
-			Bucket: bucket,
-		}
-	}
-	oi, err := rs3.clnts[0].StatObject(rs3.clnts[0].Bucket, object, miniogo.StatObjectOptions{
-		GetObjectOptions: miniogo.GetObjectOptions{
-			ServerSideEncryption: opts.ServerSideEncryption,
-		},
-	})
-	if err != nil {
-		return ObjectInfo{}, ErrorRespToObjectError(err, bucket, object)
-	}
-
-	return FromMinioClientObjectInfo(bucket, oi), nil
+	return l.getObjectInfo(ctx, bucket, object, opts)
 }
 
 // PutObject creates a new object with the incoming data,
@@ -409,6 +452,8 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 		return objInfo, ErrorRespToObjectError(err, bucket, object)
 	}
 
+	opts.UserDefined["x-amz-meta-radio-tag"] = mustGetUUID()
+
 	oinfos := make([]miniogo.ObjectInfo, len(rs3s.clnts))
 	g := errgroup.WithNErrs(len(rs3s.clnts))
 	for index := range rs3s.clnts {
@@ -419,22 +464,28 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 				readers[index], data.Size(),
 				data.MD5Base64String(), data.SHA256HexString(),
 				ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
+			oinfos[index].Key = object
+			oinfos[index].Metadata = ToMinioClientObjectInfoMetadata(opts.UserDefined)
 			return perr
 		}, index)
 	}
 
-	for _, err = range g.Wait() {
-		if err != nil {
-			return objInfo, ErrorRespToObjectError(err, bucket, object)
+	errs := g.Wait()
+	if maxErr := reduceWriteQuorumErrs(ctx, errs, nil, len(rs3s.clnts)/2+1); maxErr != nil {
+		for index, err := range errs {
+			if err == nil {
+				rs3s.clnts[index].RemoveObject(rs3s.clnts[index].Bucket, object)
+			}
 		}
+		return objInfo, maxErr
 	}
 
-	oi := oinfos[0]
-	// On success, populate the key & metadata so they are present in the notification
-	oi.Key = object
-	oi.Metadata = ToMinioClientObjectInfoMetadata(opts.UserDefined)
+	info, rindex, err := quorumInfo(oinfos)
+	if err != nil {
+		return objInfo, err
+	}
 
-	return FromMinioClientObjectInfo(bucket, oi), nil
+	return FromMinioClientObjectInfo(bucket, info, rindex), nil
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
@@ -490,13 +541,17 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		}, index)
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			return objInfo, ErrorRespToObjectError(err, srcBucket, srcObject)
+	errs := g.Wait()
+	if maxErr := reduceWriteQuorumErrs(ctx, errs, nil, len(rs3sSrc.clnts)/2+1); maxErr != nil {
+		for index, err := range errs {
+			if err == nil {
+				rs3sDest.clnts[index].RemoveObject(rs3sDest.clnts[index].Bucket, dstObject)
+			}
 		}
+		return objInfo, maxErr
 	}
 
-	return l.GetObjectInfo(ctx, dstBucket, dstObject, dstOpts)
+	return l.getObjectInfo(ctx, dstBucket, dstObject, dstOpts)
 }
 
 // DeleteObject deletes a blob in bucket
@@ -513,13 +568,17 @@ func (l *radioObjects) DeleteObject(ctx context.Context, bucket string, object s
 			Bucket: bucket,
 		}
 	}
-	for _, clnt := range rs3s.clnts {
-		if err := clnt.RemoveObject(clnt.Bucket, object); err != nil {
-			return ErrorRespToObjectError(err, bucket, object)
-		}
+
+	n := len(rs3s.clnts)
+	g := errgroup.WithNErrs(n)
+	for index := 0; index < n; index++ {
+		index := index
+		g.Go(func() error {
+			return rs3s.clnts[index].RemoveObject(rs3s.clnts[index].Bucket, object)
+		}, index)
 	}
 
-	return nil
+	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1)
 }
 
 func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
@@ -616,10 +675,8 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 		}, index)
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			return pi, ErrorRespToObjectError(err, bucket, object)
-		}
+	if maxErr := reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1); maxErr != nil {
+		return pi, maxErr
 	}
 
 	return FromMinioClientObjectPart(pinfos[0]), nil
@@ -685,11 +742,10 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 		}, index)
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			return p, ErrorRespToObjectError(err, srcBucket, srcObject)
-		}
+	if maxErr := reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3sDest.clnts)/2+1); maxErr != nil {
+		return p, maxErr
 	}
+
 	p.PartNumber = pinfos[0].PartNumber
 	p.ETag = pinfos[0].ETag
 	return p, nil
