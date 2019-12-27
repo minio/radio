@@ -6,6 +6,34 @@ Redundant Array of Distributed Independent Objectstores in short `RADIO` perform
 - Mirroring
 - Erasure Coding
 
+```
+                                                          Replicated with 3 replicas
+                                                          +-------------+
+                                                          |   Replica1  |
+                                                   S3     | +-----------+-+
+                                          +--+------------> | Replica2    |
+                                          |  |            | | +-----------+-+
+                                          |  |     S3     +-+ |             |
+                                          |  +--+-----------> | Replica3    |
+                                          |     |  S3       +-+             |
+                                          |     +------------->             |
+                    +--------------+      |                   +-------------+
+                    |              |      |
++-------+    S3     |              |  S3  |
+| App   <----------->    RADIO     <------+
++-------+           |              |      |                 Erasure coded RAID5/RAID6
+                    |              |      |                +--------------+
+                    +--------------+      |                |   Data       |
+                                          |        S3      | +------------+--+
+                                          +--+-------------> |  Data         |
+                                             |             | | +-------------+--+
+                                             |     S3      +-+ |                |
+                                             +--+------------> |   Parity       |
+                                                |  S3        +-+                |
+                                                +-------------->                |
+                                                               +----------------+
+```
+
 ## Sample Config `mirror`
 ```yml
 mirror:
