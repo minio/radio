@@ -180,7 +180,7 @@ func checkPortAvailability(host, port string) (err error) {
 	for _, n := range network {
 		l, err := net.Listen(n, net.JoinHostPort(host, port))
 		if err != nil {
-			return config.ErrorToErr(err)
+			return err
 		}
 		// As we are able to listen on this network, the port is not in use.
 		// Close the listener and continue check other networks.

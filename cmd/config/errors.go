@@ -35,6 +35,15 @@ var (
 		  --address '[fe80::da00:a6c8:e3ae:ddd7]:9000'`,
 	)
 
+	ErrConfigInvalid = newErrFn(
+		"--config input is invalid",
+		"Please provide the correct path to your config",
+		`--config or -c is path to your config.yml (default path is 'config.yml' in current directory)
+        Examples: --config /etc/radio/config.yml
+                  --config config.yml
+                  --config /opt/radio/config.yml`,
+	)
+
 	ErrPortAlreadyInUse = newErrFn(
 		"Port is already in use",
 		"Please ensure no other program uses the same address/port",

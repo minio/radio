@@ -34,16 +34,21 @@ FLAGS:
 
 EXAMPLES:
   1. Start radio server
-     {{.Prompt}} {{.HelpName}} -r config.yml
+     {{.Prompt}} {{.HelpName}} -c config.yml
 `
 
 // Handler for 'minio radio s3' command line.
 func radioMain(ctx *cli.Context) {
 	data, err := ioutil.ReadFile(ctx.String("config"))
-	logger.FatalIf(err, "Invalid command line arguments")
+	if err != nil {
+		logger.FatalIf(err, "Invalid command line arguments")
+	}
 
 	rconfig := radioConfig{}
-	logger.FatalIf(yaml.Unmarshal(data, &rconfig), "Invalid command line arguments")
+	err = yaml.Unmarshal(data, &rconfig)
+	if err != nil {
+		logger.FatalIf(err, "Invalid command line arguments")
+	}
 
 	endpoints, err := createServerEndpoints(ctx.String("address"), rconfig.Distribute.Peers)
 	logger.FatalIf(err, "Invalid command line arguments")
