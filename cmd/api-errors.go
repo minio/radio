@@ -180,26 +180,10 @@ const (
 	// new error codes here.
 
 	ErrMalformedJSON
-	ErrAdminNoSuchUser
-	ErrAdminNoSuchGroup
-	ErrAdminGroupNotEmpty
-	ErrAdminNoSuchPolicy
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
-	ErrAdminConfigNoQuorum
-	ErrAdminConfigTooLarge
-	ErrAdminConfigBadJSON
-	ErrAdminConfigDuplicateKeys
-	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
-
-	ErrHealNotImplemented
-	ErrHealNoSuchProcess
-	ErrHealInvalidClientToken
-	ErrHealMissingBucket
-	ErrHealAlreadyRunning
-	ErrHealOverlappingPaths
 	ErrIncorrectContinuationToken
 
 	// S3 Select Errors
@@ -287,10 +271,6 @@ const (
 	ErrMissingHeaders
 	ErrInvalidColumnIndex
 
-	ErrAdminConfigNotificationTargetsFailed
-	ErrAdminProfilerNotEnabled
-	ErrInvalidDecompressedSize
-	ErrAddUserInvalidArgument
 	ErrPostPolicyConditionInvalidFormat
 )
 
@@ -1295,16 +1275,6 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidColumnIndex",
 		Description:    "The column index is invalid. Please check the service documentation and try again.",
 		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrInvalidDecompressedSize: {
-		Code:           "XMinioInvalidDecompressedSize",
-		Description:    "The data provided is unfit for decompression",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrAddUserInvalidArgument: {
-		Code:           "XMinioInvalidIAMCredentials",
-		Description:    "User is not allowed to be same as admin access key",
-		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrPostPolicyConditionInvalidFormat: {
 		Code:           "PostPolicyInvalidKeyName",

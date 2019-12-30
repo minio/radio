@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net"
-	"net/url"
 	"sort"
 	"strings"
 
@@ -192,62 +190,6 @@ func checkPortAvailability(host, port string) (err error) {
 	return nil
 }
 
-// extractHostPort - extracts host/port from many address formats
-// such as, ":9000", "localhost:9000", "http://localhost:9000/"
-func extractHostPort(hostAddr string) (string, string, error) {
-	var addr, scheme string
-
-	if hostAddr == "" {
-		return "", "", errors.New("unable to process empty address")
-	}
-
-	// Simplify the work of url.Parse() and always send a url with
-	if !strings.HasPrefix(hostAddr, "http://") && !strings.HasPrefix(hostAddr, "https://") {
-		hostAddr = "//" + hostAddr
-	}
-
-	// Parse address to extract host and scheme field
-	u, err := url.Parse(hostAddr)
-	if err != nil {
-		return "", "", err
-	}
-
-	addr = u.Host
-	scheme = u.Scheme
-
-	// Use the given parameter again if url.Parse()
-	// didn't return any useful result.
-	if addr == "" {
-		addr = hostAddr
-		scheme = "http"
-	}
-
-	// At this point, addr can be one of the following form:
-	//	":9000"
-	//	"localhost:9000"
-	//	"localhost" <- in this case, we check for scheme
-
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		if !strings.Contains(err.Error(), "missing port in address") {
-			return "", "", err
-		}
-
-		host = addr
-
-		switch scheme {
-		case "https":
-			port = "443"
-		case "http":
-			port = "80"
-		default:
-			return "", "", errors.New("unable to guess port from scheme")
-		}
-	}
-
-	return host, port, nil
-}
-
 // isLocalHost - checks if the given parameter
 // correspond to one of the local IP of the
 // current machine
@@ -264,53 +206,6 @@ func isLocalHost(host string, port string, localPort string) (bool, error) {
 		return (isLocalv4 || isLocalv6) && (port == localPort), nil
 	}
 	return isLocalv4 || isLocalv6, nil
-}
-
-// sameLocalAddrs - returns true if two addresses, even with different
-// formats, point to the same machine, e.g:
-//  ':9000' and 'http://localhost:9000/' will return true
-func sameLocalAddrs(addr1, addr2 string) (bool, error) {
-
-	// Extract host & port from given parameters
-	host1, port1, err := extractHostPort(addr1)
-	if err != nil {
-		return false, err
-	}
-	host2, port2, err := extractHostPort(addr2)
-	if err != nil {
-		return false, err
-	}
-
-	var addr1Local, addr2Local bool
-
-	if host1 == "" {
-		// If empty host means it is localhost
-		addr1Local = true
-	} else {
-		// Host not empty, check if it is local
-		if addr1Local, err = isLocalHost(host1, port1, port1); err != nil {
-			return false, err
-		}
-	}
-
-	if host2 == "" {
-		// If empty host means it is localhost
-		addr2Local = true
-	} else {
-		// Host not empty, check if it is local
-		if addr2Local, err = isLocalHost(host2, port2, port2); err != nil {
-			return false, err
-		}
-	}
-
-	// If both of addresses point to the same machine, check if
-	// have the same port
-	if addr1Local && addr2Local {
-		if port1 == port2 {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // CheckLocalServerAddr - checks if serverAddr is valid and local host.
