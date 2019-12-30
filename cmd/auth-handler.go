@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"

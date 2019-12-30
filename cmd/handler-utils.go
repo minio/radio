@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
 )
 

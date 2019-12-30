@@ -14,7 +14,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/radio/cmd/logger"
 	"github.com/skyrings/skyring-common/tools/uuid"

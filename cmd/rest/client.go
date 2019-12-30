@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 // DefaultRESTTimeout - default RPC timeout is one minute.

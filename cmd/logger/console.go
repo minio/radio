@@ -8,7 +8,7 @@ import (
 	"time"
 
 	c "github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/radio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/color"
 )
 

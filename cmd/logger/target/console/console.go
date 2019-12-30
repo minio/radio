@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/radio/cmd/logger"
+	"github.com/minio/radio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/color"
 )
 

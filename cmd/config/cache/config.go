@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/minio/minio/cmd/config"
+	"github.com/minio/radio/cmd/config"
 	"github.com/minio/minio/pkg/ellipses"
 )
 

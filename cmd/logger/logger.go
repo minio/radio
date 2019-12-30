@@ -14,7 +14,7 @@ import (
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio-go/v6/pkg/set"
-	"github.com/minio/minio/cmd/logger/message/log"
+	"github.com/minio/radio/cmd/logger/message/log"
 )
 
 var (

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"

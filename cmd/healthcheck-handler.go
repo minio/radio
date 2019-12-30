@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"runtime"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 const (

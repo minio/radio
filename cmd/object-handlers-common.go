@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 var (

@@ -8,7 +8,7 @@ import (
 	gohttp "net/http"
 	"strings"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 // Target implements logger.Target and sends the json

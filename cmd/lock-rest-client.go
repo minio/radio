@@ -10,8 +10,8 @@ import (
 
 	"net/url"
 
-	"github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/rest"
+	"github.com/minio/radio/cmd/http"
+	"github.com/minio/radio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/radio/cmd/logger"
 )

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/cmd/logger/message/audit"
+	"github.com/minio/radio/cmd/logger/message/audit"
 )
 
 // ResponseWriter - is a wrapper to trap the http response status code.

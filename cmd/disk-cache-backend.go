@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/djherbis/atime"
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/radio/cmd/logger"
 	"github.com/ncw/directio"

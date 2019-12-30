@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	xhttp "github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 // Returns a hexadecimal representation of time at the
