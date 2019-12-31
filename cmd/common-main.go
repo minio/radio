@@ -4,8 +4,8 @@ import (
 	"crypto/x509"
 
 	"github.com/minio/cli"
-	"github.com/minio/radio/cmd/config"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/radio/cmd/config"
 	"github.com/minio/radio/cmd/logger"
 )
 

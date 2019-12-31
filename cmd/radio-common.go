@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
+	xhttp "github.com/minio/radio/cmd/http"
 
 	minio "github.com/minio/minio-go/v6"
 )

@@ -9,12 +9,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/radio/cmd/config"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
 )
 

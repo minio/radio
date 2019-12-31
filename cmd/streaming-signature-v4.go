@@ -13,8 +13,8 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	xhttp "github.com/minio/radio/cmd/http"
 	sha256 "github.com/minio/sha256-simd"
 )
 

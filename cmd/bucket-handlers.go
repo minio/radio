@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/policy"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
 )
 

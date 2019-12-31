@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"strings"
 
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/policy"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 // Verify if request has JWT.

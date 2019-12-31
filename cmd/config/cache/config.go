@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/minio/radio/cmd/config"
 	"github.com/minio/minio/pkg/ellipses"
+	"github.com/minio/radio/cmd/config"
 )
 
 // Config represents cache config settings

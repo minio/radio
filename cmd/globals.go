@@ -6,11 +6,11 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/pubsub"
 	"github.com/minio/radio/cmd/config/cache"
+	xhttp "github.com/minio/radio/cmd/http"
 )
 
 // minio configuration related constants.

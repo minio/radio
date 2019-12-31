@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/set"
-	"github.com/minio/radio/cmd/config"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/radio/cmd/config"
 	"github.com/minio/radio/cmd/logger"
 )
 

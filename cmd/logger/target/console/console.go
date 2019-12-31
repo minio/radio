@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/radio/cmd/logger"
 	"github.com/minio/radio/cmd/logger/message/log"
-	"github.com/minio/minio/pkg/color"
 )
 
 // Target implements loggerTarget to send log

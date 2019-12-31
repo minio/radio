@@ -10,10 +10,10 @@ import (
 
 	"net/url"
 
-	"github.com/minio/radio/cmd/http"
-	"github.com/minio/radio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/radio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
+	"github.com/minio/radio/cmd/rest"
 )
 
 // lockRESTClient is authenticable lock REST client

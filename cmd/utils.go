@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/handlers"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
 
 	humanize "github.com/dustin/go-humanize"

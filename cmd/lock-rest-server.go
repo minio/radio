@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/radio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/radio/cmd/rest"
 )
 
 var (

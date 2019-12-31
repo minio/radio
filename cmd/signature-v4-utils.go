@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/sha256-simd"
 )
 
