@@ -1,5 +1,6 @@
 > This project is not yet ready for production use
 # Radio Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fminio%2Fradio.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fminio%2Fradio?ref=badge_shield)
 Redundant Array of Distributed Independent Objectstores in short `RADIO` performs synchronous mirroring, erasure coding across multiple object stores licensed under AGPLv3.0
 
 ## Features
@@ -112,3 +113,6 @@ This project is licensed under AGPLv3.0
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
  ```
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fminio%2Fradio.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fminio%2Fradio?ref=badge_large)
