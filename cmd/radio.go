@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/minio/cli"
@@ -39,11 +40,25 @@ FLAGS:
 EXAMPLES:
   1. Start radio server
      {{.Prompt}} {{.HelpName}} -c config.yml
+
+  2. Start radio server with config from stdin
+     {{.Prompt}} cat config.yml | {{.HelpName}} -c -
 `
 
 // Handler for 'minio radio s3' command line.
 func radioMain(ctx *cli.Context) {
-	data, err := ioutil.ReadFile(ctx.String("config"))
+	var reader io.Reader
+	if ctx.String("config") == "-" {
+		reader = os.Stdin
+	} else {
+		var err error
+		reader, err = os.Open(ctx.String("config"))
+		if err != nil {
+			logger.FatalIf(err, "Invalid command line arguments")
+		}
+	}
+
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		logger.FatalIf(err, "Invalid command line arguments")
 	}

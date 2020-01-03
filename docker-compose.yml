@@ -1,0 +1,54 @@
+version: '3'
+services:
+  radio:
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+    image: "minio/radio:edge"
+    hostname: "radio"
+    restart: always
+    ports:
+      - "9000:9000"
+    command: server -c /config.yml
+
+  minio1:
+    volumes:
+      - "minio1:/data"
+    image: "minio/minio:edge"
+    command: server --address ":9001" /data
+    restart: always
+    ports:
+      - "9001:9001"
+    environment:
+      MINIO_ACCESS_KEY: "minio"
+      MINIO_SECRET_KEY: "minio123"
+
+  minio2:
+    volumes:
+      - "minio2:/data"
+    image: "minio/minio:edge"
+    command: server --address ":9002" /data
+    restart: always
+    ports:
+      - "9002:9002"
+    environment:
+      MINIO_ACCESS_KEY: "minio"
+      MINIO_SECRET_KEY: "minio123"
+
+  minio3:
+    volumes:
+      - "minio3:/data"
+    image: "minio/minio:edge"
+    command: server --address ":9003" /data
+    restart: always
+    ports:
+      - "9003:9003"
+    environment:
+      MINIO_ACCESS_KEY: "minio"
+      MINIO_SECRET_KEY: "minio123"
+
+volumes:
+  minio1:
+  minio2:
+  minio3:

@@ -1,9 +1,10 @@
-FROM alpine:3.9
+FROM alpine:3.10
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 COPY radio /usr/bin/
+COPY config.yml /
 
 RUN \
      apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
