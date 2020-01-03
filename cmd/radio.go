@@ -22,6 +22,10 @@ import (
 	"github.com/minio/radio/pkg/streamdup"
 )
 
+func init() {
+	miniogo.MaxRetry = 1
+}
+
 const radioTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
 
@@ -252,12 +256,17 @@ func (l *radioObjects) ListObjects(ctx context.Context, bucket string, prefix st
 			Bucket: bucket,
 		}
 	}
-	result, err := rs3.clnts[0].ListObjects(rs3.clnts[0].Bucket, prefix, marker, delimiter, maxKeys)
-	if err != nil {
-		return loi, ErrorRespToObjectError(err, bucket)
-	}
 
-	return FromMinioClientListBucketResult(bucket, result), nil
+	var err error
+	for _, clnt := range rs3.clnts {
+		var result miniogo.ListBucketResult
+		result, err = clnt.ListObjects(clnt.Bucket, prefix, marker, delimiter, maxKeys)
+		if err != nil {
+			continue
+		}
+		return FromMinioClientListBucketResult(bucket, result), nil
+	}
+	return loi, ErrorRespToObjectError(err, bucket)
 }
 
 // ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
@@ -268,13 +277,18 @@ func (l *radioObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 			Bucket: bucket,
 		}
 	}
-	result, err := rs3.clnts[0].ListObjectsV2(rs3.clnts[0].Bucket, prefix,
-		continuationToken, fetchOwner, delimiter, maxKeys, startAfter)
-	if err != nil {
-		return loi, ErrorRespToObjectError(err, bucket)
+	var err error
+	for _, clnt := range rs3.clnts {
+		var result miniogo.ListBucketV2Result
+		result, err = clnt.ListObjectsV2(clnt.Bucket, prefix,
+			continuationToken, fetchOwner, delimiter,
+			maxKeys, startAfter)
+		if err != nil {
+			continue
+		}
+		return FromMinioClientListBucketV2Result(bucket, result), nil
 	}
-
-	return FromMinioClientListBucketV2Result(bucket, result), nil
+	return loi, ErrorRespToObjectError(err, bucket)
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
@@ -327,7 +341,10 @@ func (l *radioObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			}
 		}
 
-		reader, _, _, err := rs3s.clnts[info.ReplicaIndex].GetObject(rs3s.clnts[info.ReplicaIndex].Bucket, object, opts)
+		reader, _, _, err := rs3s.clnts[info.ReplicaIndex].GetObjectWithContext(
+			ctx,
+			rs3s.clnts[info.ReplicaIndex].Bucket,
+			object, opts)
 		if err != nil {
 			pw.CloseWithError(ErrorRespToObjectError(err, bucket, object))
 			return
@@ -367,7 +384,7 @@ func quorumInfo(infos []miniogo.ObjectInfo) (miniogo.ObjectInfo, int, error) {
 	}
 	var maximalUUID string
 	for uuid, count := range tagCounter {
-		if count > len(infos)/2+1 {
+		if count > len(infos)/2 {
 			maximalUUID = uuid
 			break
 		}
@@ -401,9 +418,15 @@ func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object 
 	for index := range rs3s.clnts {
 		index := index
 		g.Go(func() error {
+			nctx, cancel := context.WithTimeout(context.Background(),
+				3*time.Second)
+			defer cancel()
+
 			var perr error
-			oinfos[index], perr = rs3s.clnts[index].StatObject(rs3s.clnts[index].Bucket,
-				object, miniogo.StatObjectOptions{
+			oinfos[index], perr = rs3s.clnts[index].StatObjectWithContext(
+				nctx,
+				rs3s.clnts[index].Bucket, object,
+				miniogo.StatObjectOptions{
 					GetObjectOptions: miniogo.GetObjectOptions{
 						ServerSideEncryption: opts.ServerSideEncryption,
 					},
@@ -412,8 +435,8 @@ func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object 
 		}, index)
 	}
 
-	if maxErr := reduceReadQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1); maxErr != nil {
-		return ObjectInfo{}, maxErr
+	if maxErr := reduceReadQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2); maxErr != nil {
+		return ObjectInfo{}, ErrorRespToObjectError(maxErr, bucket, object)
 	}
 
 	info, rindex, err := quorumInfo(oinfos)
@@ -465,7 +488,8 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 		index := index
 		g.Go(func() error {
 			var perr error
-			oinfos[index], perr = rs3s.clnts[index].PutObject(rs3s.clnts[index].Bucket, object,
+			oinfos[index], perr = rs3s.clnts[index].PutObjectWithContext(ctx,
+				rs3s.clnts[index].Bucket, object,
 				readers[index], data.Size(),
 				data.MD5Base64String(), data.SHA256HexString(),
 				ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
@@ -482,7 +506,7 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 				rs3s.clnts[index].RemoveObject(rs3s.clnts[index].Bucket, object)
 			}
 		}
-		return objInfo, maxErr
+		return objInfo, ErrorRespToObjectError(maxErr, bucket, object)
 	}
 
 	info, rindex, err := quorumInfo(oinfos)
@@ -540,7 +564,9 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		index := index
 		g.Go(func() error {
 			var err error
-			oinfos[index], err = rs3sSrc.clnts[index].CopyObject(rs3sSrc.clnts[index].Bucket, srcObject,
+			oinfos[index], err = rs3sSrc.clnts[index].CopyObjectWithContext(
+				ctx,
+				rs3sSrc.clnts[index].Bucket, srcObject,
 				rs3sDest.clnts[index].Bucket, dstObject, srcInfo.UserDefined)
 			return err
 		}, index)
@@ -550,10 +576,12 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 	if maxErr := reduceWriteQuorumErrs(ctx, errs, nil, len(rs3sSrc.clnts)/2+1); maxErr != nil {
 		for index, err := range errs {
 			if err == nil {
-				rs3sDest.clnts[index].RemoveObject(rs3sDest.clnts[index].Bucket, dstObject)
+				rs3sDest.clnts[index].RemoveObject(
+					rs3sDest.clnts[index].Bucket,
+					dstObject)
 			}
 		}
-		return objInfo, maxErr
+		return objInfo, ErrorRespToObjectError(maxErr, srcBucket, srcObject)
 	}
 
 	return l.getObjectInfo(ctx, dstBucket, dstObject, dstOpts)
@@ -588,9 +616,46 @@ func (l *radioObjects) DeleteObject(ctx context.Context, bucket string, object s
 
 func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
 	errs := make([]error, len(objects))
-	for idx, object := range objects {
-		errs[idx] = l.DeleteObject(ctx, bucket, object)
+
+	objectLock := l.NewNSLock(ctx, bucket, "")
+	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
+		return errs, err
 	}
+	defer objectLock.Unlock()
+
+	rs3s, ok := l.mirrorClients[bucket]
+	if !ok {
+		return errs, BucketNotFound{
+			Bucket: bucket,
+		}
+	}
+
+	n := len(rs3s.clnts)
+
+	objectsCh := make(chan string)
+
+	var errsCh []<-chan miniogo.RemoveObjectError
+	for index := 0; index < n; index++ {
+		index := index
+		go func() {
+			errsCh[index] = rs3s.clnts[index].RemoveObjectsWithContext(ctx, rs3s.clnts[index].Bucket, objectsCh)
+		}()
+	}
+
+	for idx, object := range objects {
+		select {
+		case objectsCh <- object:
+			var oerrs []error
+			for _, errCh := range errsCh {
+				select {
+				case err := <-errCh:
+					oerrs = append(oerrs, err.Err)
+				}
+			}
+			errs[idx] = reduceWriteQuorumErrs(ctx, oerrs, nil, len(rs3s.clnts)/2+1)
+		}
+	}
+
 	return errs, nil
 }
 
@@ -601,13 +666,17 @@ func (l *radioObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 		return lmi, BucketNotFound{Bucket: bucket}
 	}
 
-	result, err := rs3.clnts[0].ListMultipartUploads(rs3.clnts[0].Bucket, prefix,
-		keyMarker, uploadIDMarker, delimiter, maxUploads)
-	if err != nil {
-		return lmi, err
+	var err error
+	for _, clnt := range rs3.clnts {
+		var result miniogo.ListMultipartUploadsResult
+		result, err = clnt.ListMultipartUploads(clnt.Bucket, prefix,
+			keyMarker, uploadIDMarker, delimiter, maxUploads)
+		if err != nil {
+			continue
+		}
+		return FromMinioClientListMultipartsInfo(result), nil
 	}
-
-	return FromMinioClientListMultipartsInfo(result), nil
+	return lmi, ErrorRespToObjectError(err, bucket)
 }
 
 // NewMultipartUpload upload object in multiple parts
@@ -673,7 +742,9 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 		index := index
 		g.Go(func() error {
 			var err error
-			pinfos[index], err = rs3s.clnts[index].PutObjectPart(rs3s.clnts[index].Bucket, object,
+			pinfos[index], err = rs3s.clnts[index].PutObjectPartWithContext(
+				ctx,
+				rs3s.clnts[index].Bucket, object,
 				uploadIDs[index], partID, readers[index], data.Size(),
 				data.MD5Base64String(), data.SHA256HexString(), opts.ServerSideEncryption)
 			return err
@@ -681,7 +752,7 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 	}
 
 	if maxErr := reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1); maxErr != nil {
-		return pi, maxErr
+		return pi, ErrorRespToObjectError(maxErr, bucket, object)
 	}
 
 	return FromMinioClientObjectPart(pinfos[0]), nil
@@ -740,7 +811,9 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 		index := index
 		g.Go(func() error {
 			var err error
-			pinfos[index], err = rs3sSrc.clnts[index].CopyObjectPart(rs3sSrc.clnts[index].Bucket,
+			pinfos[index], err = rs3sSrc.clnts[index].CopyObjectPartWithContext(
+				ctx,
+				rs3sSrc.clnts[index].Bucket,
 				srcObject, rs3sDest.clnts[index].Bucket, destObject,
 				uploadIDs[index], partID, startOffset, length, srcInfo.UserDefined)
 			return err
@@ -748,7 +821,7 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 	}
 
 	if maxErr := reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3sDest.clnts)/2+1); maxErr != nil {
-		return p, maxErr
+		return p, ErrorRespToObjectError(maxErr, srcBucket, srcObject)
 	}
 
 	p.PartNumber = pinfos[0].PartNumber
@@ -780,7 +853,8 @@ func (l *radioObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 
 	rs3s := l.mirrorClients[bucket]
 	for index, id := range uploadIDs {
-		if err := rs3s.clnts[index].AbortMultipartUpload(rs3s.clnts[index].Bucket, object, id); err != nil {
+		if err := rs3s.clnts[index].AbortMultipartUploadWithContext(
+			ctx, rs3s.clnts[index].Bucket, object, id); err != nil {
 			return ErrorRespToObjectError(err, bucket, object)
 		}
 	}
@@ -819,7 +893,9 @@ func (l *radioObjects) CompleteMultipartUpload(ctx context.Context, bucket strin
 	rs3s := l.mirrorClients[bucket]
 	var etag string
 	for index, id := range uploadIDs {
-		etag, err = rs3s.clnts[index].CompleteMultipartUpload(rs3s.clnts[index].Bucket,
+		etag, err = rs3s.clnts[index].CompleteMultipartUploadWithContext(
+			ctx,
+			rs3s.clnts[index].Bucket,
 			object, id, ToMinioClientCompleteParts(uploadedParts))
 		if err != nil {
 			return oi, ErrorRespToObjectError(err, bucket, object)
