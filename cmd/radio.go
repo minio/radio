@@ -647,30 +647,53 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 
 	n := len(rs3s.clnts)
 
-	objectsCh := make(chan string)
-
-	var errsCh []<-chan miniogo.RemoveObjectError
+	objectsChs := make([]chan string, n)
 	for index := 0; index < n; index++ {
 		index := index
+		objectsChs[index] = make(chan string)
 		go func() {
-			errsCh[index] = rs3s.clnts[index].RemoveObjectsWithContext(ctx, rs3s.clnts[index].Bucket, objectsCh)
+			defer close(objectsChs[index])
+			for _, object := range objects {
+				objectsChs[index] <- object
+			}
 		}()
 	}
 
-	for idx, object := range objects {
-		select {
-		case objectsCh <- object:
-			var oerrs []error
-			for _, errCh := range errsCh {
-				select {
-				case err := <-errCh:
-					oerrs = append(oerrs, err.Err)
+	var errsCh = make([]<-chan miniogo.RemoveObjectError, n)
+	for index := 0; index < n; index++ {
+		errsCh[index] = rs3s.clnts[index].RemoveObjectsWithContext(ctx,
+			rs3s.clnts[index].Bucket,
+			objectsChs[index])
+	}
+
+	multiObjectError := make(map[string][]error)
+	var exitCount int
+	for {
+		for _, errCh := range errsCh {
+			select {
+			case err, ok := <-errCh:
+				if !ok {
+					exitCount++
+					break
 				}
+				multiObjectError[err.ObjectName] = append(
+					multiObjectError[err.ObjectName],
+					err.Err,
+				)
 			}
-			errs[idx] = reduceWriteQuorumErrs(ctx, oerrs, nil, len(rs3s.clnts)/2+1)
+		}
+		if exitCount == len(errsCh) {
+			break
 		}
 	}
 
+	for objName, errs := range multiObjectError {
+		for idx, robjName := range objects {
+			if objName == robjName {
+				errs[idx] = reduceWriteQuorumErrs(ctx, errs, nil, len(rs3s.clnts)/2+1)
+			}
+		}
+	}
 	return errs, nil
 }
 
