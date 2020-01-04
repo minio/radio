@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/radio/cmd/logger"
-	"golang.org/x/crypto/blake2b"
 )
 
 const (
@@ -364,8 +362,6 @@ const (
 	HighwayHash256
 	// HighwayHash256S represents the Streaming HighwayHash-256 hash function
 	HighwayHash256S
-	// BLAKE2b512 represents the BLAKE2b-512 hash function
-	BLAKE2b512
 )
 
 // DefaultBitrotAlgorithm is the default algorithm used for bitrot protection.
@@ -375,7 +371,6 @@ const (
 
 var bitrotAlgorithms = map[BitrotAlgorithm]string{
 	SHA256:          "sha256",
-	BLAKE2b512:      "blake2b",
 	HighwayHash256:  "highwayhash256",
 	HighwayHash256S: "highwayhash256S",
 }
@@ -383,11 +378,6 @@ var bitrotAlgorithms = map[BitrotAlgorithm]string{
 // New returns a new hash.Hash calculating the given bitrot algorithm.
 func (a BitrotAlgorithm) New() hash.Hash {
 	switch a {
-	case SHA256:
-		return sha256.New()
-	case BLAKE2b512:
-		b2, _ := blake2b.New512(nil) // New512 never returns an error if the key is nil
-		return b2
 	case HighwayHash256:
 		hh, _ := highwayhash.New(magicHighwayHash256Key) // New will never return error since key is 256 bit
 		return hh
