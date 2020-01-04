@@ -92,6 +92,11 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
 
+	// Override any values from ENVs.
+	if err := lookupConfigEnv(radio.rconfig); err != nil {
+		logger.FatalIf(err, "Unable to initialize server config")
+	}
+
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
@@ -101,11 +106,6 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 		globalObjLayerMutex.Lock()
 		globalCacheObjectAPI = cacheAPI
 		globalObjLayerMutex.Unlock()
-	}
-
-	// Override any values from ENVs.
-	if err := lookupConfigEnv(radio.rconfig); err != nil {
-		logger.FatalIf(err, "Unable to initialize server config")
 	}
 
 	router := mux.NewRouter().SkipClean(true)
