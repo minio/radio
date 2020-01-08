@@ -106,9 +106,24 @@ func newS3(bucket, urlStr, accessKey, secretKey, sessionToken string) (*miniogo.
 	// Set custom transport
 	clnt.SetCustomTransport(NewCustomHTTPTransport())
 
-	// Check if the provided keys are valid.
-	if _, err = clnt.BucketExists(bucket); err != nil {
-		return nil, err
+	var retry int
+	var maxRetry = 3
+	for {
+		// Check if the provided keys are valid.
+		_, err = clnt.BucketExists(bucket)
+		if err != nil {
+			errResp := miniogo.ToErrorResponse(err)
+			if errResp.Code == "XMinioServerNotInitialized" {
+				logger.LogIf(context.Background(), err)
+				time.Sleep(1 * time.Second)
+				retry++
+				continue
+			}
+			if retry < maxRetry {
+				return nil, err
+			}
+		}
+		break
 	}
 
 	return &miniogo.Core{Client: clnt}, nil
