@@ -10,43 +10,52 @@ services:
     restart: always
     ports:
       - "9000:9000"
-    command: server -c /config.yml
+    command:
+      - server
+      - -c
+      - /config.yml
 
   minio1:
     volumes:
       - "minio1:/data"
     image: "minio/minio:edge"
-    command: server --address ":9001" /data
+    command:
+      - server
+      - /data
     restart: always
     ports:
-      - "9001:9001"
+      - "9001:9000"
     environment:
-      MINIO_ACCESS_KEY: "minio"
-      MINIO_SECRET_KEY: "minio123"
+      MINIO_ACCESS_KEY: "TX8mIIOGC12QBMJ45F0Z"
+      MINIO_SECRET_KEY: "9ule1ga5JMfMmQXCoEPNcM2jij"
 
   minio2:
     volumes:
       - "minio2:/data"
     image: "minio/minio:edge"
-    command: server --address ":9002" /data
+    command:
+      - server
+      - /data
     restart: always
     ports:
-      - "9002:9002"
+      - "9002:9000"
     environment:
-      MINIO_ACCESS_KEY: "minio"
-      MINIO_SECRET_KEY: "minio123"
+      MINIO_ACCESS_KEY: "GX82IIOGC12QBMJ45F0Z"
+      MINIO_SECRET_KEY: "9ux11ga5JMfMmQXCoEPNcM2jij"
 
   minio3:
     volumes:
       - "minio3:/data"
     image: "minio/minio:edge"
-    command: server --address ":9003" /data
+    command:
+      - server
+      - /data
     restart: always
     ports:
-      - "9003:9003"
+      - "9003:9000"
     environment:
-      MINIO_ACCESS_KEY: "minio"
-      MINIO_SECRET_KEY: "minio123"
+      MINIO_ACCESS_KEY: "HX8KIIOGC12QBMJ45F0Z"
+      MINIO_SECRET_KEY: "9ux41ga5JMfMmQXCoEPNcM2jij"
 
 volumes:
   minio1:

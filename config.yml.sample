@@ -16,11 +16,13 @@ cache:
     - "*.db"
   quota: 90
   expiry: 30
-mirror:
-  - local:
-      access_key: Q3AM3UQ867SPQQA43P2F
-      bucket: radiobucket1
-      secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+
+buckets:
+  - bucket: radiobucket1
+    access_key: Q3AM3UQ867SPQQA43P2F
+    secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    protection:
+      scheme: replicate
     remote:
       - access_key: TX8mIIOGC12QBMJ45F0Z
         bucket: bucket1
@@ -34,12 +36,12 @@ mirror:
         bucket: bucket3
         endpoint: http://minio-minio3:9000
         secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
-erasure:
-  - local:
-      access_key: Q3AM3UQ867SPQQA43P2F
-      bucket: radiobucket1
-      secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-    parity: 1
+  - bucket: radiobucket2
+    access_key: Q3AM3UQ867SPQQA43P2F
+    secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    protection:
+      scheme: erasure
+      parity: 1
     remote:
       - access_key: TX8mIIOGC12QBMJ45F0Z
         bucket: bucket1

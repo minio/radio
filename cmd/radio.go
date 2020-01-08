@@ -47,15 +47,9 @@ EXAMPLES:
 
 // Handler for 'minio radio s3' command line.
 func radioMain(ctx *cli.Context) {
-	var reader io.Reader
-	if ctx.String("config") == "-" {
-		reader = os.Stdin
-	} else {
-		var err error
-		reader, err = os.Open(ctx.String("config"))
-		if err != nil {
-			logger.FatalIf(err, "Invalid command line arguments")
-		}
+	reader, err := os.Open(ctx.String("config"))
+	if err != nil {
+		logger.FatalIf(err, "Invalid command line arguments")
 	}
 
 	data, err := ioutil.ReadAll(reader)
@@ -129,12 +123,32 @@ func newS3(bucket, urlStr, accessKey, secretKey, sessionToken string) (*miniogo.
 	return &miniogo.Core{Client: clnt}, nil
 }
 
-type bucketConfig struct {
+// ProtectionType different protection types
+type ProtectionType string
+
+// Different type of protection types.
+const (
+	ReplicaType ProtectionType = "replicate"
+	ErasureType ProtectionType = "erasure"
+)
+
+type remoteConfig struct {
 	Bucket       string `yaml:"bucket"`
 	Endpoint     string `yaml:"endpoint"`
 	AccessKey    string `yaml:"access_key"`
 	SecretKey    string `yaml:"secret_key"`
-	SessionToken string `yaml:"sessionToken"`
+	SessionToken string `yaml:"session_token"`
+}
+
+type bucketConfig struct {
+	Bucket     string `yaml:"bucket"`
+	AccessKey  string `yaml:"access_key"`
+	SecretKey  string `yaml:"secret_key"`
+	Protection struct {
+		Scheme ProtectionType `json:"scheme"`
+		Parity int            `json:"parity"`
+	} `json:"protection"`
+	Remotes []remoteConfig `yaml:"remote"`
 }
 
 // radioConfig radio configuration
@@ -154,18 +168,24 @@ type radioConfig struct {
 		Quota   int      `yaml:"quota"`
 		Expiry  int      `yaml:"expiry"`
 	} `yaml:"cache"`
-	Mirror []struct {
-		Local  bucketConfig   `yaml:"local"`
-		Remote []bucketConfig `yaml:"remote"`
-	} `yaml:"mirror"`
-	Erasure []struct {
-		Parity int            `yaml:"parity"`
-		Local  bucketConfig   `yaml:"local"`
-		Remote []bucketConfig `yaml:"remote"`
-	} `yaml:"erasure"`
+	Buckets []bucketConfig `json:"buckets"`
 }
 
-func newBucketClients(bcfgs []bucketConfig) ([]bucketClient, error) {
+type bucketClient struct {
+	*miniogo.Core
+	Bucket string
+}
+
+type mirrorConfig struct {
+	clnts []bucketClient
+}
+
+type erasureConfig struct {
+	parity int
+	clnts  []bucketClient
+}
+
+func newBucketClients(bcfgs []remoteConfig) ([]bucketClient, error) {
 	var clnts []bucketClient
 	for _, bCfg := range bcfgs {
 		clnt, err := newS3(bCfg.Bucket, bCfg.Endpoint, bCfg.AccessKey, bCfg.SecretKey, bCfg.SessionToken)
@@ -197,23 +217,20 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 	}
 
 	// creds are ignored here, since S3 radio implements chaining all credentials.
-	for _, remotes := range g.rconfig.Mirror {
-		clnts, err := newBucketClients(remotes.Remote)
+	for _, cfg := range g.rconfig.Buckets {
+		clnts, err := newBucketClients(cfg.Remotes)
 		if err != nil {
 			return nil, err
 		}
-		s.mirrorClients[remotes.Local.Bucket] = mirrorConfig{
-			clnts: clnts,
-		}
-	}
-	for _, remotes := range g.rconfig.Erasure {
-		clnts, err := newBucketClients(remotes.Remote)
-		if err != nil {
-			return nil, err
-		}
-		s.erasureClients[remotes.Local.Bucket] = erasureConfig{
-			parity: remotes.Parity,
-			clnts:  clnts,
+		if cfg.Protection.Scheme == ReplicaType {
+			s.mirrorClients[cfg.Bucket] = mirrorConfig{
+				clnts: clnts,
+			}
+		} else if cfg.Protection.Scheme == ErasureType {
+			s.erasureClients[cfg.Bucket] = erasureConfig{
+				parity: cfg.Protection.Parity,
+				clnts:  clnts,
+			}
 		}
 	}
 	return &s, nil
@@ -222,20 +239,6 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 // Production - radio radio is not yet production ready.
 func (g *Radio) Production() bool {
 	return true
-}
-
-type bucketClient struct {
-	*miniogo.Core
-	Bucket string
-}
-
-type mirrorConfig struct {
-	clnts []bucketClient
-}
-
-type erasureConfig struct {
-	parity int
-	clnts  []bucketClient
 }
 
 // radioObjects implements radio for MinIO and S3 compatible object storage servers.

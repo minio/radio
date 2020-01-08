@@ -88,7 +88,6 @@ func newApp(name string) *cli.App {
 	}
 
 	// Register all commands.
-	// registerCommand(serverCmd)
 	registerCommand(radioCmd)
 
 	// Set up app.

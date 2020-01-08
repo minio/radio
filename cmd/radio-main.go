@@ -52,13 +52,12 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 		logger.FatalIf(errUnexpected, "Radio implementation not initialized")
 	}
 
-	for _, mcfg := range radio.rconfig.Mirror {
-		cred, err := auth.CreateCredentials(mcfg.Local.AccessKey, mcfg.Local.SecretKey)
+	for _, cfg := range radio.rconfig.Buckets {
+		cred, err := auth.CreateCredentials(cfg.AccessKey, cfg.SecretKey)
 		if err != nil {
 			logger.FatalIf(err, "Invalid credentials")
 		}
-		cred.SessionToken = mcfg.Local.SessionToken
-		globalLocalCreds[mcfg.Local.AccessKey] = cred
+		globalLocalCreds[cfg.AccessKey] = cred
 	}
 
 	// Disable logging until radio initialization is complete, any
@@ -118,8 +117,8 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	// Add server metrics router
 	registerMetricsRouter(router)
 
-	for _, lCfg := range radio.rconfig.Mirror {
-		registerAPIRouter(router, lCfg.Local.Bucket)
+	for _, cfg := range radio.rconfig.Buckets {
+		registerAPIRouter(router, cfg.Bucket)
 	}
 
 	// If none of the routes match add default error handler routes
