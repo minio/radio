@@ -34,49 +34,74 @@ Redundant Array of Distributed Independent Objectstores in short `RADIO` perform
                                                                +----------------+
 ```
 
-## Sample Config `mirror`
+## Sample Config
 ```yml
-mirror:
-- local:
-    bucket: radiobucket1
-    access_key: Q3AM3UQ867SPQQA43P2F
-    secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-  remote:
-  - bucket: bucket1
-    endpoint: http://domain1.com:9001
-    access_key: TX8mIIOGC12QBMJ45F0Z
-    secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket2
-    endpoint: http://domain2.com:9002
-    access_key: GX82IIOGC12QBMJ45F0Z
-    secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket3
-    endpoint: http://domain3.com:9003
-    access_key: HX8KIIOGC12QBMJ45F0Z
-    secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
-```
+---
+## Distributed mode for distributed locking
+## across many radio instances
+distribute:
+  peers: https://server{1...32}:9000/
+  token: 32bytestring
+  certs:
+    cert_file: /etc/certs/public.crt
+    key_file: /etc/certs/private.key
+    ca_path: /etc/certs/CAs
 
-## Sample Config `erasure`
-```yml
-erasure:
-- parity: 1
-  local:
-    bucket: radiobucket1
+## Local caching based on MinIO
+## caching implementation
+cache:
+  drives:
+    - /mnt/cache1
+    - /mnt/cache2
+    - /mnt/cache3
+  exclude:
+    - bucket1/*
+    - "*.db"
+  quota: 90
+  expiry: 30
+
+## Radio buckets configuration with all its remotes
+## Supports two protection schema's
+## - replicate
+## - erasure (with parity)
+buckets:
+  - bucket: radiobucket1
     access_key: Q3AM3UQ867SPQQA43P2F
     secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-  remote:
-  - bucket: bucket1
-    endpoint: http://domain1.com:9001
-    access_key: TX8mIIOGC12QBMJ45F0Z
-    secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket2
-    endpoint: http://domain2.com:9002
-    access_key: GX82IIOGC12QBMJ45F0Z
-    secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
-  - bucket: bucket3
-    endpoint: http://domain3.com:9003
-    access_key: HX8KIIOGC12QBMJ45F0Z
-    secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
+    protection:
+      scheme: replicate
+    remote:
+      - access_key: TX8mIIOGC12QBMJ45F0Z
+        bucket: bucket1
+        endpoint: http://replica1:9000
+        secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
+      - access_key: GX82IIOGC12QBMJ45F0Z
+        bucket: bucket2
+        endpoint: http://replica2:9000
+        secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
+      - access_key: HX8KIIOGC12QBMJ45F0Z
+        bucket: bucket3
+        endpoint: http://replica3:9000
+        secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
+  - bucket: radiobucket2
+    access_key: Q3AM3UQ867SPQQA43P2F
+    secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+    protection:
+      scheme: erasure
+      parity: 1
+    remote:
+      - access_key: TX8mIIOGC12QBMJ45F0Z
+        bucket: bucket1
+        endpoint: http://erasure1.com:9000
+        secret_key: 9ule1ga5JMfMmQXCoEPNcM2jij
+      - access_key: GX82IIOGC12QBMJ45F0Z
+        bucket: bucket2
+        endpoint: http://erasure2.com:9000
+        secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
+      - access_key: HX8KIIOGC12QBMJ45F0Z
+        bucket: bucket3
+        endpoint: http://erasure3.com:9000
+        secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
 ```
 
 ## Starting `radio`
