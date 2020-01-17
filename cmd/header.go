@@ -94,7 +94,7 @@ func (s3) IsRequested(h http.Header) bool {
 // whether they contain valid values.
 func (s3) ParseHTTP(h http.Header) (err error) {
 	if h.Get(SSEHeader) != SSEAlgorithmAES256 {
-		err = errors.New("The encryption method is not supported")
+		err = errors.New("the encryption method is not supported")
 	}
 	return
 }
@@ -125,7 +125,7 @@ func (s3KMS) IsRequested(h http.Header) bool {
 func (s3KMS) ParseHTTP(h http.Header) (string, interface{}, error) {
 	algorithm := h.Get(SSEHeader)
 	if algorithm != SSEAlgorithmKMS {
-		return "", nil, errors.New("The encryption method is not supported")
+		return "", nil, errors.New("the encryption method is not supported")
 	}
 
 	contextStr, ok := h[SSEKmsContext]
@@ -211,27 +211,27 @@ func (ssec) ParseHTTP(h http.Header) (key [32]byte, err error) {
 var (
 	// ErrInvalidCustomerAlgorithm indicates that the specified SSE-C algorithm
 	// is not supported.
-	ErrInvalidCustomerAlgorithm = errors.New("The SSE-C algorithm is not supported")
+	ErrInvalidCustomerAlgorithm = errors.New("the SSE-C algorithm is not supported")
 
 	// ErrMissingCustomerKey indicates that the HTTP headers contains no SSE-C client key.
-	ErrMissingCustomerKey = errors.New("The SSE-C request is missing the customer key")
+	ErrMissingCustomerKey = errors.New("the SSE-C request is missing the customer key")
 
 	// ErrMissingCustomerKeyMD5 indicates that the HTTP headers contains no SSE-C client key
 	// MD5 checksum.
-	ErrMissingCustomerKeyMD5 = errors.New("The SSE-C request is missing the customer key MD5")
+	ErrMissingCustomerKeyMD5 = errors.New("the SSE-C request is missing the customer key MD5")
 
 	// ErrInvalidCustomerKey indicates that the SSE-C client key is not valid - e.g. not a
 	// base64-encoded string or not 256 bits long.
-	ErrInvalidCustomerKey = errors.New("The SSE-C client key is invalid")
+	ErrInvalidCustomerKey = errors.New("the SSE-C client key is invalid")
 
 	// ErrSecretKeyMismatch indicates that the provided secret key (SSE-C client key / SSE-S3 KMS key)
 	// does not match the secret key used during encrypting the object.
-	ErrSecretKeyMismatch = errors.New("The secret key does not match the secret key used during upload")
+	ErrSecretKeyMismatch = errors.New("the secret key does not match the secret key used during upload")
 
 	// ErrCustomerKeyMD5Mismatch indicates that the SSE-C key MD5 does not match the
 	// computed MD5 sum. This means that the client provided either the wrong key for
 	// a certain MD5 checksum or the wrong MD5 for a certain key.
-	ErrCustomerKeyMD5Mismatch = errors.New("The provided SSE-C key MD5 does not match the computed MD5 of the SSE-C key")
+	ErrCustomerKeyMD5Mismatch = errors.New("the provided SSE-C key MD5 does not match the computed MD5 of the SSE-C key")
 )
 
 // ParseHTTP parses the SSE-C copy headers and returns the SSE-C client key

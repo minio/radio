@@ -62,7 +62,6 @@ type authType int
 // List of all supported auth types.
 const (
 	authTypeUnknown authType = iota
-	authTypeAnonymous
 	authTypePresigned
 	authTypePresignedV2
 	authTypePostPolicy
@@ -70,7 +69,6 @@ const (
 	authTypeSigned
 	authTypeSignedV2
 	authTypeJWT
-	authTypeSTS
 )
 
 // Get request authentication type.
@@ -156,7 +154,7 @@ func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
 }
 
 func reqSignatureV4Verify(r *http.Request, region string, stype serviceType) (s3Error APIErrorCode) {
-	sha256sum := getContentSha256Cksum(r, stype)
+	sha256sum := getContentSha256Cksum(r)
 	switch {
 	case isRequestSignatureV4(r):
 		return doesSignatureMatch(sha256sum, r, region, stype)

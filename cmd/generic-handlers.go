@@ -131,7 +131,6 @@ func containsReservedMetadata(header http.Header) bool {
 const (
 	minioReservedBucket     = "minio"
 	minioReservedBucketPath = SlashSeparator + minioReservedBucket
-	loginPathPrefix         = SlashSeparator + "login"
 )
 
 type timeValidityHandler struct {

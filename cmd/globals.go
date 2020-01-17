@@ -32,9 +32,6 @@ const (
 	globalRadioDefaultOwnerID      = "02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4"
 	globalRadioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
-	globalNetBSDOSName             = "netbsd"
-	globalMacOSName                = "darwin"
-	globalRadioMode                = "mode-radio-1"
 
 	// Add new global values here.
 )

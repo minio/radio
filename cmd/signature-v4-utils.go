@@ -38,7 +38,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 }
 
 // Returns SHA256 for calculating canonical-request.
-func getContentSha256Cksum(r *http.Request, stype serviceType) string {
+func getContentSha256Cksum(r *http.Request) string {
 	var (
 		defaultSha256Cksum string
 		v                  []string

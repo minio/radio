@@ -55,13 +55,12 @@ func printObjectAPIMsg() {
 
 // Documentation links, these are part of message printing code.
 const (
-	mcQuickStartGuide      = "https://docs.min.io/docs/minio-client-quickstart-guide"
-	mcAdminQuickStartGuide = "https://docs.min.io/docs/minio-admin-complete-guide.html"
-	goQuickStartGuide      = "https://docs.min.io/docs/golang-client-quickstart-guide"
-	jsQuickStartGuide      = "https://docs.min.io/docs/javascript-client-quickstart-guide"
-	javaQuickStartGuide    = "https://docs.min.io/docs/java-client-quickstart-guide"
-	pyQuickStartGuide      = "https://docs.min.io/docs/python-client-quickstart-guide"
-	dotnetQuickStartGuide  = "https://docs.min.io/docs/dotnet-client-quickstart-guide"
+	mcQuickStartGuide     = "https://docs.min.io/docs/minio-client-quickstart-guide"
+	goQuickStartGuide     = "https://docs.min.io/docs/golang-client-quickstart-guide"
+	jsQuickStartGuide     = "https://docs.min.io/docs/javascript-client-quickstart-guide"
+	javaQuickStartGuide   = "https://docs.min.io/docs/java-client-quickstart-guide"
+	pyQuickStartGuide     = "https://docs.min.io/docs/python-client-quickstart-guide"
+	dotnetQuickStartGuide = "https://docs.min.io/docs/dotnet-client-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.

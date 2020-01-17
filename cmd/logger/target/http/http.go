@@ -52,7 +52,6 @@ func (h *Target) startHTTPLogger() {
 			if err != nil {
 				continue
 			}
-
 			// Drain any response.
 			xhttp.DrainBody(resp.Body)
 		}

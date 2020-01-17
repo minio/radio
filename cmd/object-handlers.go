@@ -618,7 +618,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		if !skipContentSha256Cksum(r) {
-			sha256hex = getContentSha256Cksum(r, serviceS3)
+			sha256hex = getContentSha256Cksum(r)
 		}
 	}
 
@@ -968,7 +968,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 
 		if !skipContentSha256Cksum(r) {
-			sha256hex = getContentSha256Cksum(r, serviceS3)
+			sha256hex = getContentSha256Cksum(r)
 		}
 	}
 
@@ -1101,7 +1101,7 @@ func (w *whiteSpaceWriter) WriteHeader(statusCode int) {
 // we do background append as and when the parts arrive and completeMultiPartUpload
 // is quick. Only in a rare case where parts would be out of order will
 // FS:completeMultiPartUpload() take a longer time.
-func sendWhiteSpace(w http.ResponseWriter) <-chan bool {
+func sendWhiteSpace(w io.Writer) <-chan bool {
 	doneCh := make(chan bool)
 	go func() {
 		ticker := time.NewTicker(time.Second * 10)

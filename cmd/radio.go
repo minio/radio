@@ -698,6 +698,8 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 					multiObjectError[err.ObjectName],
 					err.Err,
 				)
+			default:
+				continue
 			}
 		}
 		if exitCount == len(errsCh) {
