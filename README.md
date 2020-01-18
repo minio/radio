@@ -1,10 +1,9 @@
-> This project is not yet ready for production use
 # Radio Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
-Redundant Array of Distributed Independent Objectstores in short `RADIO` performs synchronous mirroring, erasure coding across multiple object stores licensed under AGPLv3.0
+Redundant Array of Distributed Independent Objectstores in short `RADIO` performs synchronous mirroring, erasure coding across multiple object stores licensed under *AGPLv3.0*
 
 ## Features
 - Mirroring
-- Erasure Coding
+- Erasure Coding (In-progress)
 
 ```
                                                           Replicated with 3 replicas
