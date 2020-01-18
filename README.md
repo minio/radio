@@ -92,22 +92,8 @@ Command-line Access: https://docs.min.io/docs/minio-client-quickstart-guide
 ...
 ```
 
-## License
-This project is licensed under AGPLv3.0
-```
-// This file is part of Radio
-// Copyright (c) 2019 MinIO, Inc.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
- ```
+# License
+RADIO is an free software project released under the [AGPLv3.0](https://github.com/minio/radio/blob/master/LICENSE) (Affero General Public License).
+
+# Contributing
+Please see our [Code of conduct](https://github.com/minio/radio/blob/master/code_of_conducts.md). We welcome your contributions. Please feel free to fork the code, play with it, make some patches and send us pull requests via [issues](https://github.com/minio/radio/issues).
