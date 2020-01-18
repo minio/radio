@@ -5,33 +5,8 @@ Redundant Array of Distributed Independent Objectstores in short `RADIO` perform
 - Mirroring
 - Erasure Coding (In-progress)
 
-```
-                                                          Replicated with 3 replicas
-                                                          +-------------+
-                                                          |   Replica1  |
-                                                   S3     | +-----------+-+
-                                          +--+------------> | Replica2    |
-                                          |  |            | | +-----------+-+
-                                          |  |     S3     +-+ |             |
-                                          |  +--+-----------> | Replica3    |
-                                          |     |  S3       +-+             |
-                                          |     +------------->             |
-                    +--------------+      |                   +-------------+
-                    |              |      |
-+-------+    S3     |              |  S3  |
-| App   <----------->    RADIO     <------+
-+-------+           |              |      |                 Erasure coded RAID5/RAID6
-                    |              |      |                +--------------+
-                    +--------------+      |                |   Data       |
-                                          |        S3      | +------------+--+
-                                          +--+-------------> |  Data         |
-                                             |             | | +-------------+--+
-                                             |     S3      +-+ |                |
-                                             +--+------------> |   Parity       |
-                                                |  S3        +-+                |
-                                                +-------------->                |
-                                                               +----------------+
-```
+## Architecture
+[![RADIO](https://raw.githubusercontent.com/minio/radio/master/.github/arch.svg?sanitize=true)](https://min.io)
 
 ## Sample Config
 ```yml
