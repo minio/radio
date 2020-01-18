@@ -9,8 +9,8 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
-	github.com/minio/minio v0.0.0-20200104014934-b9b2b3736688
-	github.com/minio/minio-go/v6 v6.0.44
+	github.com/minio/minio v0.0.0-20200118222113-b849fd7a756d
+	github.com/minio/minio-go/v6 v6.0.45-0.20200117140906-66cf57d21ba4
 	github.com/minio/sha256-simd v0.1.1
 	github.com/ncw/directio v1.0.5
 	github.com/prometheus/client_golang v1.3.0
