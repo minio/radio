@@ -117,8 +117,8 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	// Add server metrics router
 	registerMetricsRouter(router)
 
-	for _, cfg := range radio.rconfig.Buckets {
-		registerAPIRouter(router, cfg.Bucket)
+	for bucket := range radio.rconfig.Buckets {
+		registerAPIRouter(router, bucket)
 	}
 
 	// If none of the routes match add default error handler routes

@@ -39,7 +39,7 @@ cache:
 ## - replicate
 ## - erasure (with parity)
 buckets:
-  - bucket: radiobucket1
+  radiobucket1:
     access_key: Q3AM3UQ867SPQQA43P2F
     secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
     protection:
@@ -57,7 +57,7 @@ buckets:
         bucket: bucket3
         endpoint: http://replica3:9000
         secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
-  - bucket: radiobucket2
+  radiobucket2:
     access_key: Q3AM3UQ867SPQQA43P2F
     secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
     protection:

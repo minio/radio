@@ -168,7 +168,7 @@ type radioConfig struct {
 		Quota   int      `yaml:"quota"`
 		Expiry  int      `yaml:"expiry"`
 	} `yaml:"cache"`
-	Buckets []bucketConfig `json:"buckets"`
+	Buckets map[string]bucketConfig `json:"buckets"`
 }
 
 type bucketClient struct {
@@ -217,17 +217,17 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 	}
 
 	// creds are ignored here, since S3 radio implements chaining all credentials.
-	for _, cfg := range g.rconfig.Buckets {
+	for bucket, cfg := range g.rconfig.Buckets {
 		clnts, err := newBucketClients(cfg.Remotes)
 		if err != nil {
 			return nil, err
 		}
 		if cfg.Protection.Scheme == ReplicaType {
-			s.mirrorClients[cfg.Bucket] = mirrorConfig{
+			s.mirrorClients[bucket] = mirrorConfig{
 				clnts: clnts,
 			}
 		} else if cfg.Protection.Scheme == ErasureType {
-			s.erasureClients[cfg.Bucket] = erasureConfig{
+			s.erasureClients[bucket] = erasureConfig{
 				parity: cfg.Protection.Parity,
 				clnts:  clnts,
 			}
