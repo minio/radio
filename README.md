@@ -2,8 +2,8 @@
 Redundant Array of Distributed Independent Objectstores in short `RADIO` performs synchronous mirroring, erasure coding across multiple object stores licensed under *AGPLv3.0*
 
 ## Features
-- Mirroring
-- Erasure Coding (In-progress)
+- Replicated
+- Erasure Coded (In-progress)
 
 ## Architecture
 [![RADIO](https://raw.githubusercontent.com/minio/radio/master/.github/arch.svg?sanitize=true)](https://min.io)
