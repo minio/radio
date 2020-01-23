@@ -2,7 +2,7 @@
 Redundant Array of Distributed Independent Objectstores in short `RADIO` performs synchronous mirroring, erasure coding across multiple object stores licensed under *AGPLv3.0*
 
 ## Features
-- Replicated
+- Mirror
 - Erasure Coded (In-progress)
 
 ## Architecture
@@ -36,14 +36,14 @@ cache:
 
 ## Radio buckets configuration with all its remotes
 ## Supports two protection schema's
-## - replicate
+## - mirror
 ## - erasure (with parity)
 buckets:
   radiobucket1:
     access_key: Q3AM3UQ867SPQQA43P2F
     secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
     protection:
-      scheme: replicate
+      scheme: mirror
     remote:
       - access_key: TX8mIIOGC12QBMJ45F0Z
         bucket: bucket1

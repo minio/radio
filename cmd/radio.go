@@ -128,7 +128,7 @@ type ProtectionType string
 
 // Different type of protection types.
 const (
-	ReplicaType ProtectionType = "replicate"
+	MirrorType  ProtectionType = "mirror"
 	ErasureType ProtectionType = "erasure"
 )
 
@@ -222,7 +222,7 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-		if cfg.Protection.Scheme == ReplicaType {
+		if cfg.Protection.Scheme == MirrorType {
 			s.mirrorClients[bucket] = mirrorConfig{
 				clnts: clnts,
 			}
