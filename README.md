@@ -6,7 +6,7 @@ Redundant Array of Distributed Independent Objectstores in short `RADIO` perform
 - Erasure Coded (In-progress)
 
 ## Architecture
-[![RADIO](https://raw.githubusercontent.com/minio/radio/master/.github/arch.svg?sanitize=true)](https://min.io)
+[![RADIO](https://raw.githubusercontent.com/minio/radio/master/.github/arch.png)](https://min.io)
 
 ## Sample Config
 ```yml
