@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/radio/cmd/logger"
 )
 

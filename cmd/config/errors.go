@@ -26,6 +26,24 @@ var (
 		" Valid cache quota value must be between 0-100",
 	)
 
+	ErrInvalidCacheAfter = newErrFn(
+		"Invalid cache after value",
+		"Please check the passed value",
+		"RADIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
+	)
+
+	ErrInvalidCacheWatermarkLow = newErrFn(
+		"Invalid cache low watermark value",
+		"Please check the passed value",
+		"RADIO_CACHE_WATERMARK_LOW: Valid cache low watermark value must be between 0-100",
+	)
+
+	ErrInvalidCacheWatermarkHigh = newErrFn(
+		"Invalid cache high watermark value",
+		"Please check the passed value",
+		"RADIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
+	)
+
 	ErrInvalidAddressFlag = newErrFn(
 		"--address input is invalid",
 		"Please check --address parameter",

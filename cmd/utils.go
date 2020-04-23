@@ -100,8 +100,7 @@ const (
 	globalMaxPartID = 10000
 
 	// Default values used while communicating with the cloud backends
-	defaultDialTimeout   = 30 * time.Second
-	defaultDialKeepAlive = 30 * time.Second
+	defaultDialTimeout = 30 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -177,15 +176,17 @@ func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext 
 	}
 }
 
-func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive time.Duration) func() *http.Transport {
+func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
+		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
 		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       60 * time.Second,
-		TLSHandshakeTimeout:   30 * time.Second,
+		MaxIdleConns:          16,
+		IdleConnTimeout:       1 * time.Minute,
+		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
+		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		// Go net/http automatically unzip if content-type is
@@ -205,7 +206,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive ti
 func NewCustomHTTPTransport() *http.Transport {
 	return newCustomHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
-	}, defaultDialTimeout, defaultDialKeepAlive)()
+	}, defaultDialTimeout)()
 }
 
 // Load the json (typically from disk file).

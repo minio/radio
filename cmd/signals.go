@@ -30,7 +30,7 @@ func handleSignals() {
 		}
 
 		// send signal to various go-routines that they need to quit.
-		close(GlobalServiceDoneCh)
+		cancelGlobalContext()
 
 		return (err == nil && oerr == nil)
 	}

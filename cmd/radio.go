@@ -391,7 +391,7 @@ func (l *radioObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return NewGetObjectReaderFromReader(pr, info, o.CheckCopyPrecondFn, pipeCloser, nsUnlocker)
+	return NewGetObjectReaderFromReader(pr, info, o, pipeCloser, nsUnlocker)
 }
 
 // GetObject reads an object from S3. Supports additional
@@ -562,7 +562,7 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 		defer objectLock.Unlock()
 	}
 
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo) {
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, srcInfo.ETag) {
 		return ObjectInfo{}, PreConditionFailed{}
 	}
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
@@ -827,7 +827,7 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 	}
 	defer uploadIDLock.Unlock()
 
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo) {
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, srcInfo.ETag) {
 		return PartInfo{}, PreConditionFailed{}
 	}
 	srcInfo.UserDefined = map[string]string{

@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/policy"
 	xhttp "github.com/minio/radio/cmd/http"
 )
 
