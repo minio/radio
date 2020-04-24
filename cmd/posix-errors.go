@@ -7,19 +7,9 @@ import (
 	"syscall"
 )
 
-// Input/output error
-func isSysErrIO(err error) bool {
-	return errors.Is(err, syscall.EIO)
-}
-
 // Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
 	return errors.Is(err, syscall.ENOTDIR)
-}
-
-// Check if the given error corresponds to the ENAMETOOLONG (name too long).
-func isSysErrTooLong(err error) bool {
-	return errors.Is(err, syscall.ENAMETOOLONG)
 }
 
 // Check if the given error corresponds to ENOTEMPTY for unix
@@ -55,9 +45,4 @@ func isSysErrPathNotFound(err error) bool {
 		}
 	}
 	return false
-}
-
-// Check if given error corresponds to too many open files
-func isSysErrTooManyFiles(err error) bool {
-	return errors.Is(err, syscall.ENFILE) || errors.Is(err, syscall.EMFILE)
 }

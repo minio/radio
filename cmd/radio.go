@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,12 +12,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/cli"
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
 	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/sha256-simd"
 	"gopkg.in/yaml.v2"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
@@ -141,8 +145,7 @@ type ProtectionType string
 
 // Different type of protection types.
 const (
-	MirrorType  ProtectionType = "mirror"
-	ErasureType ProtectionType = "erasure"
+	MirrorType ProtectionType = "mirror"
 )
 
 type remoteConfig struct {
@@ -166,37 +169,48 @@ type bucketConfig struct {
 
 // radioConfig radio configuration
 type radioConfig struct {
+	Certs struct {
+		CertFile string `yaml:"cert_file"`
+		KeyFile  string `yaml:"key_file"`
+		CAPath   string `yaml:"ca_path"`
+	} `yaml:"certs"`
 	Distribute struct {
 		Peers string `yaml:"peers"`
 		Token string `yaml:"token"`
-		Certs struct {
-			CertFile string `yaml:"cert_file"`
-			KeyFile  string `yaml:"key_file"`
-			CAPath   string `yaml:"ca_path"`
-		} `yaml:"certs"`
 	} `yaml:"distribute"`
-	Cache struct {
-		Drives  []string `yaml:"drives"`
-		Exclude []string `yaml:"exclude"`
-		Quota   int      `yaml:"quota"`
-		Expiry  int      `yaml:"expiry"`
-	} `yaml:"cache"`
 	Buckets map[string]bucketConfig `json:"buckets"`
+	Journal struct {
+		Dir string `yaml:"dir"`
+	} `yaml:"journal"`
 }
 
 type bucketClient struct {
 	*miniogo.Core
-	Bucket string
+	Bucket  string
+	ID      string
+	Offline int32
+}
+
+func (b *bucketClient) isOffline() bool {
+	return atomic.LoadInt32(&b.Offline) == 0
 }
 
 type mirrorConfig struct {
 	clnts []bucketClient
 }
 
-type erasureConfig struct {
-	parity int
-	clnts  []bucketClient
+func clientID(cfg remoteConfig) string {
+	hash := sha256.New()
+	bytes, err := json.Marshal(&cfg)
+	if err != nil {
+		return fmt.Sprintf("%s%s", cfg.Bucket, cfg.Endpoint)
+	}
+	hash.Write(bytes)
+	hashBytes := hash.Sum(nil)
+	return hex.EncodeToString(hashBytes)
 }
+
+const healthCheckInterval = time.Second * 5
 
 func newBucketClients(bcfgs []remoteConfig) ([]bucketClient, error) {
 	var clnts []bucketClient
@@ -205,11 +219,39 @@ func newBucketClients(bcfgs []remoteConfig) ([]bucketClient, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		clnts = append(clnts, bucketClient{
 			Core:   clnt,
 			Bucket: bCfg.Bucket,
+			ID:     clientID(bCfg),
 		})
 	}
+	go func() {
+		for {
+			g := errgroup.WithNErrs(len(clnts))
+			for index := range clnts {
+				index := index
+				g.Go(func() error {
+					var perr error
+					_, perr = clnts[index].BucketExists(clnts[index].Bucket)
+					return perr
+				}, index)
+			}
+			for index, err := range g.Wait() {
+				if err != nil {
+					atomic.StoreInt32(&clnts[index].Offline, 0)
+				} else {
+					atomic.StoreInt32(&clnts[index].Offline, 1)
+				}
+			}
+			select {
+			case <-GlobalContext.Done():
+				return
+			default:
+				time.Sleep(healthCheckInterval)
+			}
+		}
+	}()
 	return clnts, nil
 }
 
@@ -226,11 +268,14 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 		radioLockers:         radioLockers,
 		nsMutex:              newNSLock(len(radioLockers) > 0),
 		mirrorClients:        make(map[string]mirrorConfig),
-		erasureClients:       make(map[string]erasureConfig),
+		journalDir:           g.rconfig.Journal.Dir,
 	}
 
 	// creds are ignored here, since S3 radio implements chaining all credentials.
 	for bucket, cfg := range g.rconfig.Buckets {
+		if len(cfg.Remotes) != 2 {
+			return nil, fmt.Errorf("Invalid remote configuration specified for %s,expecting 2 remotes", bucket)
+		}
 		clnts, err := newBucketClients(cfg.Remotes)
 		if err != nil {
 			return nil, err
@@ -239,13 +284,9 @@ func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 			s.mirrorClients[bucket] = mirrorConfig{
 				clnts: clnts,
 			}
-		} else if cfg.Protection.Scheme == ErasureType {
-			s.erasureClients[bucket] = erasureConfig{
-				parity: cfg.Protection.Parity,
-				clnts:  clnts,
-			}
 		}
 	}
+
 	return &s, nil
 }
 
@@ -259,9 +300,9 @@ type radioObjects struct {
 	endpoints            Endpoints
 	radioLockers         []dsync.NetLocker
 	mirrorClients        map[string]mirrorConfig
-	erasureClients       map[string]erasureConfig
 	multipartUploadIDMap map[string][]string
 	nsMutex              *NSLockMap
+	journalDir           string
 }
 
 func (l *radioObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
@@ -417,40 +458,6 @@ func (l *radioObjects) GetObject(ctx context.Context, bucket string, object stri
 	return NotImplemented{}
 }
 
-func quorumInfo(infos []miniogo.ObjectInfo) (miniogo.ObjectInfo, int, error) {
-	tagCounter := map[string]int{}
-	for _, info := range infos {
-		uuid := info.Metadata.Get("x-amz-meta-radio-tag")
-		_, ok := tagCounter[uuid]
-		if !ok {
-			tagCounter[uuid] = 1
-		} else {
-			tagCounter[uuid]++
-		}
-	}
-	var maximalUUID string
-	for uuid, count := range tagCounter {
-		if count > len(infos)/2 {
-			maximalUUID = uuid
-			break
-		}
-	}
-	if maximalUUID == "" {
-		return miniogo.ObjectInfo{}, -1, InsufficientReadQuorum{}
-	}
-
-	var info miniogo.ObjectInfo
-	var index int
-	for index, info = range infos {
-		uuid := info.Metadata.Get("x-amz-meta-radio-tag")
-		if uuid != maximalUUID {
-			continue
-		}
-		break
-	}
-	return info, index, nil
-}
-
 func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	rs3s, ok := l.mirrorClients[bucket]
 	if !ok {
@@ -458,15 +465,29 @@ func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object 
 			Bucket: bucket,
 		}
 	}
+	rIndex := []int{0, 1} // find remotes that are online
+	for index, clnt := range rs3s.clnts {
+		if clnt.isOffline() {
+			rIndex[index] = -1
+			continue
+		}
+		jDir := globalHealSys.getJournalDir(clnt.Bucket, bucket, object)
+		jlog, jerr := globalHealSys.readJournalEntry(ctx, jDir)
+		if jerr == nil && jlog.ErrClientID == clnt.ID {
+			rIndex[index] = -1
+		}
+	}
 
 	oinfos := make([]miniogo.ObjectInfo, len(rs3s.clnts))
 	g := errgroup.WithNErrs(len(rs3s.clnts))
 	for index := range rs3s.clnts {
+		if rIndex[index] == -1 { // skip offline remotes
+			continue
+		}
 		index := index
 		g.Go(func() error {
 			nctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
-
 			var perr error
 			oinfos[index], perr = rs3s.clnts[index].StatObjectWithContext(
 				nctx,
@@ -479,17 +500,16 @@ func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object 
 			return perr
 		}, index)
 	}
-
-	if maxErr := reduceReadQuorumErrs(g.Wait(), nil, len(rs3s.clnts)/2); maxErr != nil {
-		return ObjectInfo{}, ErrorRespToObjectError(maxErr, bucket, object)
-	}
-
-	info, rindex, err := quorumInfo(oinfos)
-	if err != nil {
+	for idx, err := range g.Wait() {
+		if rIndex[idx] == -1 {
+			continue
+		}
+		if err == nil {
+			return FromMinioClientObjectInfo(bucket, oinfos[idx], idx), nil
+		}
 		return ObjectInfo{}, ErrorRespToObjectError(err, bucket, object)
 	}
-
-	return FromMinioClientObjectInfo(bucket, info, rindex), nil
+	return ObjectInfo{}, BackendDown{}
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
@@ -500,16 +520,13 @@ func (l *radioObjects) GetObjectInfo(ctx context.Context, bucket string, object 
 		return ObjectInfo{}, err
 	}
 	defer objectLock.RUnlock()
-
 	return l.getObjectInfo(ctx, bucket, object, opts)
 }
 
 // PutObject creates a new object with the incoming data,
 func (l *radioObjects) PutObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	data := r.Reader
-
 	// Lock the object before reading.
-	fmt.Println(ctx, bucket, object)
 	objectLock := l.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
 		return ObjectInfo{}, err
@@ -525,8 +542,8 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 	if err != nil {
 		return objInfo, ErrorRespToObjectError(err, bucket, object)
 	}
-
-	opts.UserDefined["x-amz-meta-radio-tag"] = mustGetUUID()
+	radioTagID := mustGetUUID()
+	opts.UserDefined["x-amz-meta-radio-tag"] = radioTagID
 
 	oinfos := make([]miniogo.ObjectInfo, len(rs3s.clnts))
 	g := errgroup.WithNErrs(len(rs3s.clnts))
@@ -546,21 +563,18 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 	}
 
 	errs := g.Wait()
-	if maxErr := reduceWriteQuorumErrs(errs, len(rs3s.clnts)/2+1); maxErr != nil {
-		for index, err := range errs {
-			if err == nil {
-				rs3s.clnts[index].RemoveObject(rs3s.clnts[index].Bucket, object)
-			}
-		}
-		return objInfo, ErrorRespToObjectError(maxErr, bucket, object)
-	}
 
-	info, rindex, err := quorumInfo(oinfos)
+	rindex, err := reduceWriteErrs(errs)
 	if err != nil {
-		return objInfo, err
+		return objInfo, ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return FromMinioClientObjectInfo(bucket, info, rindex), nil
+	for index, perr := range errs {
+		if perr != nil {
+			globalHealSys.send(ctx, journalEntry{Bucket: bucket, Object: object, ErrClientID: rs3s.clnts[index].ID, SrcClientID: rs3s.clnts[rindex].ID, ReplicaBucket: rs3s.clnts[index].Bucket, Timestamp: time.Now(), Op: opPutObject, ETag: oinfos[rindex].ETag, RadioTagID: radioTagID, UserMeta: ToMinioClientMetadata(opts.UserDefined), ServerSideEncryption: opts.ServerSideEncryption})
+		}
+	}
+	return FromMinioClientObjectInfo(bucket, oinfos[rindex], rindex), nil
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
@@ -619,18 +633,24 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 	}
 
 	errs := g.Wait()
-	if maxErr := reduceWriteQuorumErrs(errs, len(rs3sSrc.clnts)/2+1); maxErr != nil {
-		for index, err := range errs {
-			if err == nil {
-				rs3sDest.clnts[index].RemoveObject(
-					rs3sDest.clnts[index].Bucket,
-					dstObject)
-			}
-		}
-		return objInfo, ErrorRespToObjectError(maxErr, srcBucket, srcObject)
+	var (
+		oerr       error
+		radioTagID string
+	)
+	rindex, err := reduceWriteErrs(errs)
+	if err != nil {
+		return objInfo, ErrorRespToObjectError(err, srcBucket, srcObject)
 	}
+	objInfo, oerr = l.getObjectInfo(ctx, dstBucket, dstObject, dstOpts)
 
-	return l.getObjectInfo(ctx, dstBucket, dstObject, dstOpts)
+	radioTagID = objInfo.UserDefined["X-Amz-Meta-Radio-Tag"]
+
+	for index, err := range errs {
+		if err != nil {
+			globalHealSys.send(ctx, journalEntry{Bucket: srcBucket, Object: srcObject, DstBucket: dstBucket, DstObject: dstObject, ReplicaBucket: rs3sSrc.clnts[index].Bucket, ErrClientID: rs3sSrc.clnts[index].ID, SrcClientID: rs3sSrc.clnts[rindex].ID, Timestamp: time.Now(), Op: opCopyObject, RadioTagID: radioTagID})
+		}
+	}
+	return objInfo, oerr
 }
 
 // DeleteObject deletes a blob in bucket
@@ -656,8 +676,17 @@ func (l *radioObjects) DeleteObject(ctx context.Context, bucket string, object s
 			return rs3s.clnts[index].RemoveObject(rs3s.clnts[index].Bucket, object)
 		}, index)
 	}
-
-	return reduceWriteQuorumErrs(g.Wait(), len(rs3s.clnts)/2+1)
+	errs := g.Wait()
+	rindex, err := reduceWriteErrs(errs)
+	if err != nil {
+		return err
+	}
+	for index, err := range errs {
+		if err != nil {
+			globalHealSys.send(ctx, journalEntry{Bucket: bucket, Object: object, ReplicaBucket: rs3s.clnts[index].Bucket, ErrClientID: rs3s.clnts[index].ID, SrcClientID: rs3s.clnts[rindex].ID, Timestamp: time.Now(), Op: opDeleteObject})
+		}
+	}
+	return nil
 }
 
 func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
@@ -677,7 +706,6 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 	}
 
 	n := len(rs3s.clnts)
-
 	objectsChs := make([]chan string, n)
 	for index := 0; index < n; index++ {
 		index := index
@@ -689,12 +717,13 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 			}
 		}()
 	}
-
 	var errsCh = make([]<-chan miniogo.RemoveObjectError, n)
+	var offlines = make([]bool, len(rs3s.clnts))
 	for index := 0; index < n; index++ {
 		errsCh[index] = rs3s.clnts[index].RemoveObjectsWithContext(ctx,
 			rs3s.clnts[index].Bucket,
 			objectsChs[index])
+		offlines[index] = rs3s.clnts[index].isOffline()
 	}
 
 	multiObjectError := make(map[string][]error)
@@ -719,11 +748,26 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 			break
 		}
 	}
-
 	for objName, errs := range multiObjectError {
 		for idx, robjName := range objects {
 			if objName == robjName {
-				errs[idx] = reduceWriteQuorumErrs(errs, len(rs3s.clnts)/2+1)
+				rindex, err := reduceWriteErrs(errs)
+				if err != nil {
+					errs[idx] = err
+				}
+				for index, err := range errs {
+					if err != nil {
+						globalHealSys.send(ctx, journalEntry{Bucket: bucket, Object: objName, ReplicaBucket: rs3s.clnts[index].Bucket, ErrClientID: rs3s.clnts[index].ID, SrcClientID: rs3s.clnts[rindex].ID, Timestamp: time.Now(), Op: opDeleteObject})
+					}
+				}
+			}
+		}
+	}
+	for i, offline := range offlines {
+		if offline {
+			for _, obj := range objects {
+				globalHealSys.send(ctx, journalEntry{Bucket: bucket, Object: obj, ReplicaBucket: rs3s.clnts[i].Bucket, ErrClientID: rs3s.clnts[i].ID, Timestamp: time.Now(), Op: opDeleteObject})
+
 			}
 		}
 	}
@@ -752,6 +796,8 @@ func (l *radioObjects) ListMultipartUploads(ctx context.Context, bucket string, 
 
 // NewMultipartUpload upload object in multiple parts
 func (l *radioObjects) NewMultipartUpload(ctx context.Context, bucket string, object string, o ObjectOptions) (string, error) {
+
+	o.UserDefined["x-amz-meta-radio-tag"] = mustGetUUID()
 
 	// Create PutObject options
 	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption}
@@ -821,12 +867,12 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 			return err
 		}, index)
 	}
-
-	if maxErr := reduceWriteQuorumErrs(g.Wait(), len(rs3s.clnts)/2+1); maxErr != nil {
-		return pi, ErrorRespToObjectError(maxErr, bucket, object)
+	rindex, err := reduceWriteErrs(g.Wait())
+	if err != nil {
+		return pi, ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return FromMinioClientObjectPart(pinfos[0]), nil
+	return FromMinioClientObjectPart(pinfos[rindex]), nil
 }
 
 // CopyObjectPart creates a part in a multipart upload by copying
@@ -890,13 +936,13 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 			return err
 		}, index)
 	}
-
-	if maxErr := reduceWriteQuorumErrs(g.Wait(), len(rs3sDest.clnts)/2+1); maxErr != nil {
-		return p, ErrorRespToObjectError(maxErr, srcBucket, srcObject)
+	rindex, err := reduceWriteErrs(g.Wait())
+	if err != nil {
+		return p, ErrorRespToObjectError(err, srcBucket, srcObject)
 	}
 
-	p.PartNumber = pinfos[0].PartNumber
-	p.ETag = pinfos[0].ETag
+	p.PartNumber = pinfos[rindex].PartNumber
+	p.ETag = pinfos[rindex].ETag
 	return p, nil
 }
 
@@ -963,15 +1009,38 @@ func (l *radioObjects) CompleteMultipartUpload(ctx context.Context, bucket strin
 
 	rs3s := l.mirrorClients[bucket]
 	var etag string
+	errs := make([]error, len(uploadIDs))
+	hasErr := false
 	for index, id := range uploadIDs {
-		etag, err = rs3s.clnts[index].CompleteMultipartUploadWithContext(
+		etag, errs[index] = rs3s.clnts[index].CompleteMultipartUploadWithContext(
 			ctx,
 			rs3s.clnts[index].Bucket,
 			object, id, ToMinioClientCompleteParts(uploadedParts))
-		if err != nil {
-			return oi, ErrorRespToObjectError(err, bucket, object)
+		hasErr = hasErr || (errs[index] != nil)
+	}
+	rindex, err := reduceWriteErrs(errs)
+	if err != nil {
+		return oi, ErrorRespToObjectError(err, bucket, object)
+	}
+
+	delete(l.multipartUploadIDMap, uploadID)
+	radioTagID := ""
+	var userMeta map[string]string
+	var sses3 encrypt.ServerSide
+	if hasErr {
+		objInfo, err := l.getObjectInfo(ctx, bucket, object, opts)
+		if err == nil {
+			radioTagID = objInfo.UserDefined["X-Amz-Meta-Radio-Tag"]
+			userMeta = objectInfoToMetadata(oi)
+			if _, ok := objInfo.UserDefined["X-Amz-Server-Side-Encryption"]; ok {
+				sses3 = encrypt.NewSSE()
+			}
 		}
 	}
-	delete(l.multipartUploadIDMap, uploadID)
+	for index, perr := range errs {
+		if perr != nil {
+			globalHealSys.send(ctx, journalEntry{Bucket: bucket, Object: object, ReplicaBucket: rs3s.clnts[index].Bucket, ErrClientID: rs3s.clnts[index].ID, SrcClientID: rs3s.clnts[rindex].ID, Timestamp: time.Now(), Op: opPutObject, ETag: etag, RadioTagID: radioTagID, UserMeta: userMeta, ServerSideEncryption: sses3})
+		}
+	}
 	return ObjectInfo{Bucket: bucket, Name: object, ETag: etag}, nil
 }

@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -209,36 +208,6 @@ func NewCustomHTTPTransport() *http.Transport {
 	}, defaultDialTimeout)()
 }
 
-// Load the json (typically from disk file).
-func jsonLoad(r io.ReadSeeker, data interface{}) error {
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	return json.NewDecoder(r).Decode(data)
-}
-
-// Save to disk file in json format.
-func jsonSave(f interface {
-	io.WriteSeeker
-	Truncate(int64) error
-}, data interface{}) error {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	if err = f.Truncate(0); err != nil {
-		return err
-	}
-	if _, err = f.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	_, err = f.Write(b)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // Returns context with ReqInfo details set in the context.
 func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	bucket, object := request2BucketObjectName(r)
@@ -263,4 +232,44 @@ func restQueries(keys ...string) []string {
 		accumulator = append(accumulator, key, "{"+key+":.*}")
 	}
 	return accumulator
+}
+
+// IsNetworkOrHostDown - if there was a network error or if the host is down.
+func IsNetworkOrHostDown(err error) bool {
+	if err == nil {
+		return false
+	}
+	// We need to figure if the error either a timeout
+	// or a non-temporary error.
+	e, ok := err.(net.Error)
+	if ok {
+		urlErr, ok := e.(*url.Error)
+		if ok {
+			switch urlErr.Err.(type) {
+			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+				return true
+			}
+		}
+		if e.Timeout() {
+			return true
+		}
+	}
+	ok = false
+	// Fallback to other mechanisms.
+	if strings.Contains(err.Error(), "Connection closed by foreign host") {
+		ok = true
+	} else if strings.Contains(err.Error(), "TLS handshake timeout") {
+		// If error is - tlsHandshakeTimeoutError.
+		ok = true
+	} else if strings.Contains(err.Error(), "i/o timeout") {
+		// If error is - tcp timeoutError.
+		ok = true
+	} else if strings.Contains(err.Error(), "connection timed out") {
+		// If err is a net.Dial timeout.
+		ok = true
+	} else if strings.Contains(strings.ToLower(err.Error()), "503 service unavailable") {
+		// Denial errors
+		ok = true
+	}
+	return ok
 }

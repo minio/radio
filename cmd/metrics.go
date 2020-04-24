@@ -130,34 +130,6 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 			api,
 		)
 	}
-
-	// Cache related metrics
-	if globalCacheConfig.Enabled {
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "hits", "total"),
-				"Total number of disk cache hits in current Radio instance",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(newCachedObjectLayerFn().CacheStats().getHits()),
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "misses", "total"),
-				"Total number of disk cache misses in current Radio instance",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(newCachedObjectLayerFn().CacheStats().getMisses()),
-		)
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "data", "served"),
-				"Total number of bytes served from cache of current Radio instance",
-				nil, nil),
-			prometheus.CounterValue,
-			float64(newCachedObjectLayerFn().CacheStats().getBytesServed()),
-		)
-	}
 }
 
 func metricsHandler() http.Handler {

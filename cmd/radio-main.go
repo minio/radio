@@ -38,7 +38,7 @@ var radioFlags = []cli.Flag{
 var (
 	radioCmd = cli.Command{
 		Name:               "server",
-		Usage:              "Start synchronous replication or erasure coding across object stores",
+		Usage:              "Start synchronous replication across object stores",
 		Flags:              append(radioFlags, GlobalFlags...),
 		Action:             radioMain,
 		CustomHelpTemplate: radioTemplate,
@@ -69,7 +69,7 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	logger.FatalIf(err, "Invalid TLS certificate file")
 
 	// Check and load Root CAs.
-	globalRootCAs, err = config.GetRootCAs(radio.rconfig.Distribute.Certs.CAPath)
+	globalRootCAs, err = config.GetRootCAs(radio.rconfig.Certs.CAPath)
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	// Set system resources to maximum.
@@ -83,17 +83,6 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 		logger.FatalIf(err, "Unable to initialize server config")
 	}
 
-	if globalCacheConfig.Enabled {
-		// initialize the new disk cache objects.
-		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
-
-		globalObjLayerMutex.Lock()
-		globalCacheObjectAPI = cacheAPI
-		globalObjLayerMutex.Unlock()
-	}
-
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// If none of the routes match add default error handler routes
@@ -102,6 +91,8 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 
 	if len(radio.endpoints) > 0 {
 		registerLockRESTHandlers(router, radio.endpoints, radio.rconfig.Distribute.Token)
+		registerPeerRESTHandlers(router, radio.endpoints, radio.rconfig.Distribute.Token)
+		globalNotificationSys = NewNotificationSys(radio.endpoints, radio.rconfig.Distribute.Token)
 	}
 
 	// Add healthcheck router
@@ -148,6 +139,10 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
+	if radio.rconfig.Journal.Dir != "" {
+		globalHealSys = newHealSys(GlobalContext, radio.rconfig.Journal.Dir)
+		go globalHealSys.init()
+	}
 	// This is only to uniquely identify each radio deployments.
 	globalDeploymentID = env.Get("RADIO_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)

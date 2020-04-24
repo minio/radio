@@ -13,26 +13,13 @@ Redundant Array of Distributed Independent Objectstores in short `RADIO` perform
 ---
 ## Distributed mode for distributed locking
 ## across many radio instances
+certs:
+  cert_file: /etc/certs/public.crt
+  key_file: /etc/certs/private.key
+  ca_path: /etc/certs/CAs
 distribute:
   peers: https://server{1...32}:9000/
   token: 32bytestring
-  certs:
-    cert_file: /etc/certs/public.crt
-    key_file: /etc/certs/private.key
-    ca_path: /etc/certs/CAs
-
-## Local caching based on MinIO
-## caching implementation
-cache:
-  drives:
-    - /mnt/cache1
-    - /mnt/cache2
-    - /mnt/cache3
-  exclude:
-    - bucket1/*
-    - "*.db"
-  quota: 90
-  expiry: 30
 
 ## Radio buckets configuration with all its remotes
 ## Supports two protection schema's
@@ -53,10 +40,6 @@ buckets:
         bucket: bucket2
         endpoint: http://replica2:9000
         secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
-      - access_key: HX8KIIOGC12QBMJ45F0Z
-        bucket: bucket3
-        endpoint: http://replica3:9000
-        secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
   radiobucket2:
     access_key: Q3AM3UQ867SPQQA43P2F
     secret_key: zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
@@ -72,10 +55,6 @@ buckets:
         bucket: bucket2
         endpoint: http://erasure2.com:9000
         secret_key: 9ux11ga5JMfMmQXCoEPNcM2jij
-      - access_key: HX8KIIOGC12QBMJ45F0Z
-        bucket: bucket3
-        endpoint: http://erasure3.com:9000
-        secret_key: 9ux41ga5JMfMmQXCoEPNcM2jij
 ```
 
 ## Starting `radio`

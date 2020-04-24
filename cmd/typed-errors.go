@@ -28,3 +28,6 @@ var errInvalidRange = errors.New("Invalid range")
 // errInvalidRangeSource - returned when given range value exceeds
 // the source object size.
 var errInvalidRangeSource = errors.New("Range specified exceeds source object size")
+
+// errServerNotInitialized - server not initialized.
+var errServerNotInitialized = errors.New("Server not initialized, please try again")

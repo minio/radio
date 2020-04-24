@@ -20,16 +20,9 @@ func newObjectLayerFn() ObjectLayer {
 	return globalObjectAPI
 }
 
-func newCachedObjectLayerFn() CacheObjectLayer {
-	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
-	return globalCacheObjectAPI
-}
-
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
-	CacheAPI  func() CacheObjectLayer
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
@@ -37,7 +30,6 @@ func registerAPIRouter(router *mux.Router, bucketName string) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
-		CacheAPI:  newCachedObjectLayerFn,
 	}
 
 	var routers []*mux.Router

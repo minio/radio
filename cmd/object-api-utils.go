@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/minio/minio/pkg/hash"
-	xhttp "github.com/minio/radio/cmd/http"
 	"github.com/minio/radio/cmd/logger"
 	"github.com/skyrings/skyring-common/tools/uuid"
 )
@@ -33,6 +33,9 @@ const (
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 )
+
+// Beginning of unix time is treated as sentinel value here.
+var timeSentinel = time.Unix(0, 0).UTC()
 
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
@@ -171,47 +174,6 @@ func getCompleteMultipartMD5(parts []CompletePart) string {
 	}
 	s3MD5 := fmt.Sprintf("%s-%d", getMD5Hash(finalMD5Bytes), len(parts))
 	return s3MD5
-}
-
-// Clean unwanted fields from metadata
-func cleanMetadata(metadata map[string]string) map[string]string {
-	// Remove STANDARD StorageClass
-	metadata = removeStandardStorageClass(metadata)
-	// Clean meta etag keys 'md5Sum', 'etag', "expires".
-	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires")
-}
-
-// Filter X-Amz-Storage-Class field only if it is set to STANDARD.
-// This is done since AWS S3 doesn't return STANDARD Storage class as response header.
-func removeStandardStorageClass(metadata map[string]string) map[string]string {
-	if metadata[xhttp.AmzStorageClass] == "STANDARD" {
-		delete(metadata, xhttp.AmzStorageClass)
-	}
-	return metadata
-}
-
-// cleanMetadataKeys takes keyNames to be filtered
-// and returns a new map with all the entries with keyNames removed.
-func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[string]string {
-	var newMeta = make(map[string]string)
-	for k, v := range metadata {
-		if contains(keyNames, k) {
-			continue
-		}
-		newMeta[k] = v
-	}
-	return newMeta
-}
-
-// Extracts etag value from the metadata.
-func extractETag(metadata map[string]string) string {
-	// md5Sum tag is kept for backward compatibility.
-	etag, ok := metadata["md5Sum"]
-	if !ok {
-		etag = metadata["etag"]
-	}
-	// Success.
-	return etag
 }
 
 // HasPrefix - Prefix matcher string matches prefix in a platform specific way.

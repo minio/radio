@@ -36,7 +36,8 @@ var streamPool = sync.Pool{
 }
 
 type multiWriter struct {
-	writers []*io.PipeWriter
+	writers     []*io.PipeWriter
+	writeQuorum int
 }
 
 func (t *multiWriter) CloseWithError(err error) error {
@@ -67,8 +68,15 @@ func (t *multiWriter) Write(p []byte) (int, error) {
 			return nil
 		}, index)
 	}
-	for _, err := range g.Wait() {
+	errs := g.Wait()
+	errCnt := 0
+	for _, err := range errs {
 		if err != nil {
+			errCnt++
+		}
+	}
+	for _, err := range errs {
+		if err != nil && errCnt >= t.writeQuorum {
 			t.CloseWithError(err)
 			return 0, err
 		}
@@ -91,7 +99,7 @@ func New(r io.Reader, dupN int) ([]io.Reader, error) {
 	for i := range readers {
 		readers[i], writers[i] = io.Pipe()
 	}
-	w := &multiWriter{writers: writers}
+	w := &multiWriter{writers: writers, writeQuorum: len(writers)/2 + 1}
 	bufp := streamPool.Get().(*[]byte)
 	go func() {
 		defer streamPool.Put(bufp)

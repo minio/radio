@@ -47,8 +47,8 @@ func logStartupMessage(msg string) {
 }
 
 func getTLSConfig(rconfig radioConfig) (x509Certs []*x509.Certificate, c *certs.Certs, secureConn bool, err error) {
-	certFile := rconfig.Distribute.Certs.CertFile
-	keyFile := rconfig.Distribute.Certs.KeyFile
+	certFile := rconfig.Certs.CertFile
+	keyFile := rconfig.Certs.KeyFile
 	if !(isFile(certFile) && isFile(keyFile)) {
 		return nil, nil, false, nil
 	}
