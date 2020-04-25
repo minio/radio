@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"syscall"
@@ -17,13 +18,22 @@ const (
 
 // Global service signal channel.
 var globalServiceSignalCh chan serviceSignal
+var GlobalContext context.Context
 
 // GlobalServiceDoneCh - Global service done channel.
-var GlobalServiceDoneCh chan struct{}
+var GlobalServiceDoneCh <-chan struct{}
+
+// cancelGlobalContext can be used to indicate server shutdown.
+var cancelGlobalContext context.CancelFunc
 
 // Initialize service mutex once.
 func init() {
-	GlobalServiceDoneCh = make(chan struct{})
+	initGlobalContext()
+}
+
+func initGlobalContext() {
+	GlobalContext, cancelGlobalContext = context.WithCancel(context.Background())
+	GlobalServiceDoneCh = GlobalContext.Done()
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 

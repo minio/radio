@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,7 +12,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/minio/highwayhash"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/radio/cmd/logger"
 )
 
@@ -345,65 +343,8 @@ func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile
 	var reader io.Reader = readCloser
 
 	actualSize := uint64(st.Size())
-	_, err = c.bitrotWriteToCache(destDir, reader, uint64(actualSize))
+	_, err = c.bitrotWriteToCache(destDir, cacheDataFile, reader, uint64(actualSize))
 	return err
-}
-
-// magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
-var magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
-
-// BitrotAlgorithm specifies a algorithm used for bitrot protection.
-type BitrotAlgorithm uint
-
-const (
-	// SHA256 represents the SHA-256 hash function
-	SHA256 BitrotAlgorithm = 1 + iota
-	// HighwayHash256 represents the HighwayHash-256 hash function
-	HighwayHash256
-	// HighwayHash256S represents the Streaming HighwayHash-256 hash function
-	HighwayHash256S
-)
-
-// DefaultBitrotAlgorithm is the default algorithm used for bitrot protection.
-const (
-	DefaultBitrotAlgorithm = HighwayHash256S
-)
-
-var bitrotAlgorithms = map[BitrotAlgorithm]string{
-	SHA256:          "sha256",
-	HighwayHash256:  "highwayhash256",
-	HighwayHash256S: "highwayhash256S",
-}
-
-// New returns a new hash.Hash calculating the given bitrot algorithm.
-func (a BitrotAlgorithm) New() hash.Hash {
-	switch a {
-	case HighwayHash256:
-		hh, _ := highwayhash.New(magicHighwayHash256Key) // New will never return error since key is 256 bit
-		return hh
-	case HighwayHash256S:
-		hh, _ := highwayhash.New(magicHighwayHash256Key) // New will never return error since key is 256 bit
-		return hh
-	default:
-		logger.CriticalIf(context.Background(), errors.New("Unsupported bitrot algorithm"))
-		return nil
-	}
-}
-
-// Available reports whether the given algorithm is available.
-func (a BitrotAlgorithm) Available() bool {
-	_, ok := bitrotAlgorithms[a]
-	return ok
-}
-
-// String returns the string identifier for a given bitrot algorithm.
-// If the algorithm is not supported String panics.
-func (a BitrotAlgorithm) String() string {
-	name, ok := bitrotAlgorithms[a]
-	if !ok {
-		logger.CriticalIf(context.Background(), errors.New("Unsupported bitrot algorithm"))
-	}
-	return name
 }
 
 // migrate cache contents from old cacheFS format to new backend format
@@ -463,6 +404,7 @@ func migrateOldCache(ctx context.Context, c *diskCache) error {
 			}
 			// marshal cache metadata after adding version and stat info
 			meta := &cacheMeta{}
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err = json.Unmarshal(metaBytes, &meta); err != nil {
 				return err
 			}

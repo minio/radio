@@ -7,7 +7,8 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"path"
+	slashpath "path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -144,7 +145,7 @@ func pathJoin(elem ...string) string {
 			trailingSlash = SlashSeparator
 		}
 	}
-	return path.Join(elem...) + trailingSlash
+	return slashpath.Join(elem...) + trailingSlash
 }
 
 // mustGetUUID - get a random UUID.
@@ -261,15 +262,15 @@ type GetObjectReader struct {
 	pReader io.Reader
 
 	cleanUpFns []func()
-	precondFn  func(ObjectInfo) bool
+	opts       ObjectOptions
 	once       sync.Once
 }
 
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
-func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (*GetObjectReader, error) {
-	if pcfn != nil {
-		if ok := pcfn(oi); ok {
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions, cleanupFns ...func()) (*GetObjectReader, error) {
+	if opts.CheckCopyPrecondFn != nil {
+		if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 			// Call the cleanup funcs
 			for i := len(cleanupFns) - 1; i >= 0; i-- {
 				cleanupFns[i]()
@@ -281,7 +282,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPrec
 		ObjInfo:    oi,
 		pReader:    r,
 		cleanUpFns: cleanupFns,
-		precondFn:  pcfn,
+		opts:       opts,
 	}, nil
 }
 
@@ -295,7 +296,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckCopyPrecon
 // are called on Close() in reverse order as passed here. NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanUpFns ...func()) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cleanUpFns ...func()) (
 	fn ObjReaderFn, off, length int64, err error) {
 
 	// Call the clean-up functions immediately in case of exit
@@ -314,8 +315,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 	}
 	fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 		cFns = append(cleanUpFns, cFns...)
-		if pcfn != nil {
-			if ok := pcfn(oi); ok {
+		if opts.CheckCopyPrecondFn != nil {
+			if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 				// Call the cleanup funcs
 				for i := len(cFns) - 1; i >= 0; i-- {
 					cFns[i]()
@@ -327,10 +328,11 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			ObjInfo:    oi,
 			pReader:    inputReader,
 			cleanUpFns: cFns,
-			precondFn:  pcfn,
+			opts:       opts,
 		}
 		return r, nil
 	}
+
 	return fn, off, length, nil
 }
 
@@ -438,4 +440,39 @@ func (d *detectDisconnect) Read(p []byte) (int, error) {
 	default:
 		return d.ReadCloser.Read(p)
 	}
+}
+
+// pathsJoinPrefix - like pathJoin retains trailing SlashSeparator
+// for all elements, prepends them with 'prefix' respectively.
+func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
+	paths = make([]string, len(elem))
+	for i, e := range elem {
+		paths[i] = pathJoin(prefix, e)
+	}
+	return paths
+}
+
+// checkPathLength - returns error if given path name length more than 255
+func checkPathLength(pathName string) error {
+	// Apple OS X path length is limited to 1016
+	if runtime.GOOS == "darwin" && len(pathName) > 1016 {
+		return errFileNameTooLong
+	}
+
+	if runtime.GOOS == "windows" {
+		// Convert any '\' to '/'.
+		pathName = filepath.ToSlash(pathName)
+	}
+
+	// Check each path segment length is > 255
+	for len(pathName) > 0 && pathName != "." && pathName != SlashSeparator {
+		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
+
+		if len(file) > 255 {
+			return errFileNameTooLong
+		}
+
+		pathName = dir
+	} // Success.
+	return nil
 }

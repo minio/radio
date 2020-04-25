@@ -5,6 +5,7 @@ import (
 	"errors"
 	pathutil "path"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -158,8 +159,8 @@ func (n *NSLockMap) RUnlock(volume, path, opsID string) {
 
 // dsync's distributed lock instance.
 type distLockInstance struct {
-	rwMutex             *dsync.DRWMutex
-	volume, path, opsID string
+	rwMutex *dsync.DRWMutex
+	opsID   string
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
@@ -169,7 +170,7 @@ func (di *distLockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error)
 
 	if !di.rwMutex.GetLock(di.opsID, lockSource, timeout.Timeout()) {
 		timeout.LogFailure()
-		return OperationTimedOut{Path: di.path}
+		return OperationTimedOut{}
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
 	return nil
@@ -186,7 +187,7 @@ func (di *distLockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr error
 	start := UTCNow()
 	if !di.rwMutex.GetRLock(di.opsID, lockSource, timeout.Timeout()) {
 		timeout.LogFailure()
-		return OperationTimedOut{Path: di.path}
+		return OperationTimedOut{}
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
 	return nil
@@ -199,22 +200,26 @@ func (di *distLockInstance) RUnlock() {
 
 // localLockInstance - frontend/top-level interface for namespace locks.
 type localLockInstance struct {
-	ctx                 context.Context
-	ns                  *NSLockMap
-	volume, path, opsID string
+	ctx    context.Context
+	ns     *NSLockMap
+	volume string
+	paths  []string
+	opsID  string
 }
 
 // NewNSLock - returns a lock instance for a given volume and
-// path. The returned lockInstance object encapsulates the NSLockMap,
+// path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
-func (n *NSLockMap) NewNSLock(ctx context.Context, lockersFn func() []dsync.NetLocker, volume, path string) RWLocker {
+func (n *NSLockMap) NewNSLock(ctx context.Context, lockersFn func() []dsync.NetLocker, volume string, paths ...string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistributed {
-		return &distLockInstance{dsync.NewDRWMutex(ctx, pathJoin(volume, path), &dsync.Dsync{
+		drwmutex := dsync.NewDRWMutex(ctx, &dsync.Dsync{
 			GetLockersFn: lockersFn,
-		}), volume, path, opsID}
+		}, pathsJoinPrefix(volume, paths...)...)
+		return &distLockInstance{drwmutex, opsID}
 	}
-	return &localLockInstance{ctx, n, volume, path, opsID}
+	sort.Strings(paths)
+	return &localLockInstance{ctx, n, volume, paths, opsID}
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
@@ -222,9 +227,16 @@ func (li *localLockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := false
-	if !li.ns.lock(li.ctx, li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
-		timeout.LogFailure()
-		return OperationTimedOut{Path: li.path}
+	var success []int
+	for i, path := range li.paths {
+		if !li.ns.lock(li.ctx, li.volume, path, lockSource, li.opsID, readLock, timeout.Timeout()) {
+			timeout.LogFailure()
+			for _, sint := range success {
+				li.ns.unlock(li.volume, li.paths[sint], readLock)
+			}
+			return OperationTimedOut{}
+		}
+		success = append(success, i)
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
 	return
@@ -233,7 +245,9 @@ func (li *localLockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error
 // Unlock - block until write lock is released.
 func (li *localLockInstance) Unlock() {
 	readLock := false
-	li.ns.unlock(li.volume, li.path, readLock)
+	for _, path := range li.paths {
+		li.ns.unlock(li.volume, path, readLock)
+	}
 }
 
 // RLock - block until read lock is taken or timeout has occurred.
@@ -241,9 +255,16 @@ func (li *localLockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr erro
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := true
-	if !li.ns.lock(li.ctx, li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
-		timeout.LogFailure()
-		return OperationTimedOut{Path: li.path}
+	var success []int
+	for i, path := range li.paths {
+		if !li.ns.lock(li.ctx, li.volume, path, lockSource, li.opsID, readLock, timeout.Timeout()) {
+			timeout.LogFailure()
+			for _, sint := range success {
+				li.ns.unlock(li.volume, li.paths[sint], readLock)
+			}
+			return OperationTimedOut{}
+		}
+		success = append(success, i)
 	}
 	timeout.LogSuccess(UTCNow().Sub(start))
 	return
@@ -252,7 +273,9 @@ func (li *localLockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr erro
 // RUnlock - block until read lock is released.
 func (li *localLockInstance) RUnlock() {
 	readLock := true
-	li.ns.unlock(li.volume, li.path, readLock)
+	for _, path := range li.paths {
+		li.ns.unlock(li.volume, path, readLock)
+	}
 }
 
 func getSource() string {

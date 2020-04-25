@@ -10,14 +10,21 @@ import (
 	"github.com/minio/radio/cmd/config"
 )
 
+const (
+	cacheDelimiterLegacy = ";"
+)
+
 // Config represents cache config settings
 type Config struct {
-	Enabled bool     `json:"-"`
-	Drives  []string `json:"drives"`
-	Expiry  int      `json:"expiry"`
-	MaxUse  int      `json:"maxuse"`
-	Quota   int      `json:"quota"`
-	Exclude []string `json:"exclude"`
+	Enabled       bool     `json:"-"`
+	Drives        []string `json:"drives"`
+	Expiry        int      `json:"expiry"`
+	MaxUse        int      `json:"maxuse"`
+	Quota         int      `json:"quota"`
+	Exclude       []string `json:"exclude"`
+	After         int      `json:"after"`
+	WatermarkLow  int      `json:"watermark_low"`
+	WatermarkHigh int      `json:"watermark_high"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
@@ -44,7 +51,18 @@ func (cfg *Config) UnmarshalJSON(data []byte) (err error) {
 	if _cfg.Quota < 0 {
 		return errors.New("config quota value should not be null or negative")
 	}
-
+	if _cfg.After < 0 {
+		return errors.New("cache after value should not be less than 0")
+	}
+	if _cfg.WatermarkLow < 0 || _cfg.WatermarkLow > 100 {
+		return errors.New("config low watermark value should be between 0 and 100")
+	}
+	if _cfg.WatermarkHigh < 0 || _cfg.WatermarkHigh > 100 {
+		return errors.New("config high watermark value should be between 0 and 100")
+	}
+	if _cfg.WatermarkLow > 0 && (_cfg.WatermarkLow >= _cfg.WatermarkHigh) {
+		return errors.New("config low watermark value should be less than high watermark")
+	}
 	return nil
 }
 
@@ -55,7 +73,11 @@ func parseCacheDrives(drives string) ([]string, error) {
 		return drivesSlice, nil
 	}
 
-	drivesSlice = strings.Split(drives, cacheDelimiter)
+	drivesSlice = strings.Split(drives, cacheDelimiterLegacy)
+	if len(drivesSlice) == 1 && drivesSlice[0] == drives {
+		drivesSlice = strings.Split(drives, cacheDelimiter)
+	}
+
 	var endpoints []string
 	for _, d := range drivesSlice {
 		if len(d) == 0 {
@@ -101,7 +123,11 @@ func parseCacheExcludes(excludes string) ([]string, error) {
 		return excludesSlice, nil
 	}
 
-	excludesSlice = strings.Split(excludes, cacheDelimiter)
+	excludesSlice = strings.Split(excludes, cacheDelimiterLegacy)
+	if len(excludesSlice) == 1 && excludesSlice[0] == excludes {
+		excludesSlice = strings.Split(excludes, cacheDelimiter)
+	}
+
 	for _, e := range excludesSlice {
 		if len(e) == 0 {
 			return nil, config.ErrInvalidCacheExcludesValue(nil).Msg("cache exclude path (%s) cannot be empty", e)
