@@ -129,8 +129,8 @@ func containsReservedMetadata(header http.Header) bool {
 
 // Reserved bucket.
 const (
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = SlashSeparator + minioReservedBucket
+	radioReservedBucket     = ".radio"
+	radioReservedBucketPath = SlashSeparator + radioReservedBucket
 )
 
 type timeValidityHandler struct {
@@ -182,7 +182,7 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 
 func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	aType := getRequestAuthType(r)
-	if aType == authTypeSigned || aType == authTypeSignedV2 || aType == authTypeStreamingSigned {
+	if aType == authTypeSigned || aType == authTypeStreamingSigned {
 		// Verify if date headers are set, if not reject the request
 		amzDate, errCode := parseAmzDateHeader(r)
 		if errCode != ErrNone {
@@ -250,7 +250,7 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 }
 
 func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
+	isS3Request := !strings.HasPrefix(r.URL.Path, radioReservedBucketPath)
 	// record s3 connection stats.
 	recordRequest := &recordTrafficRequest{ReadCloser: r.Body, isS3Request: isS3Request}
 	r.Body = recordRequest
@@ -293,7 +293,12 @@ func hasBadPathComponent(path string) bool {
 // Check if client is sending a malicious request.
 func hasMultipleAuth(r *http.Request) bool {
 	authTypeCount := 0
-	for _, hasValidAuth := range []func(*http.Request) bool{isRequestSignatureV2, isRequestPresignedSignatureV2, isRequestSignatureV4, isRequestPresignedSignatureV4, isRequestJWT, isRequestPostPolicySignatureV4} {
+	for _, hasValidAuth := range []func(*http.Request) bool{
+		isRequestSignatureV4,
+		isRequestPresignedSignatureV4,
+		isRequestPostPolicySignatureV4,
+		isRequestBearerToken,
+	} {
 		if hasValidAuth(r) {
 			authTypeCount++
 		}

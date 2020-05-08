@@ -159,35 +159,6 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 	}, nil
 }
 
-// ZoneEndpoints represent endpoints in a given zone
-// along with its setCount and drivesPerSet.
-type ZoneEndpoints struct {
-	SetCount     int
-	DrivesPerSet int
-	Endpoints    Endpoints
-}
-
-// EndpointZones - list of list of endpoints
-type EndpointZones []ZoneEndpoints
-
-// FirstLocal returns true if the first endpoint is local.
-func (l EndpointZones) FirstLocal() bool {
-	return l[0].Endpoints[0].IsLocal
-}
-
-// HTTPS - returns true if secure for URLEndpointType.
-func (l EndpointZones) HTTPS() bool {
-	return l[0].Endpoints.HTTPS()
-}
-
-// Nodes - returns all nodes count
-func (l EndpointZones) Nodes() (count int) {
-	for _, ep := range l {
-		count += len(ep.Endpoints)
-	}
-	return count
-}
-
 // Endpoints - list of same type of endpoint.
 type Endpoints []Endpoint
 
@@ -352,51 +323,6 @@ func createEndpoints(serverAddr string, args ...string) (Endpoints, error) {
 
 			localEndpointCount++
 		}
-	}
-
-	// Check whether same path is not used in endpoints of a host on different port.
-	{
-		pathIPMap := make(map[string]set.StringSet)
-		for _, endpoint := range endpoints {
-			host := endpoint.Hostname()
-			hostIPSet, _ := getHostIP(host)
-			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
-				if !IPSet.Intersection(hostIPSet).IsEmpty() {
-					return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg(fmt.Sprintf("path '%s' can not be served by different port on same address", endpoint.Path))
-				}
-				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
-			} else {
-				pathIPMap[endpoint.Path] = hostIPSet
-			}
-		}
-	}
-
-	// Check whether same path is used for more than 1 local endpoints.
-	{
-		localPathSet := set.CreateStringSet()
-		for _, endpoint := range endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-			if localPathSet.Contains(endpoint.Path) {
-				return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg(fmt.Sprintf("path '%s' cannot be served by different address on same server", endpoint.Path))
-			}
-			localPathSet.Add(endpoint.Path)
-		}
-	}
-
-	// All endpoints are pointing to local host
-	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, then this is XL setup using URL style endpoints.
-		if len(localPortSet) == 1 {
-			if len(localServerHostSet) > 1 {
-				return endpoints, config.ErrInvalidRadioEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
-			}
-			return endpoints, nil
-		}
-
-		// Even though all endpoints are local, but those endpoints use different ports.
-		// This means it is DistXL setup.
 	}
 
 	// Add missing port in all endpoints.

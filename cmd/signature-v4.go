@@ -132,10 +132,6 @@ func getSignature(signingKey []byte, stringToSign string) string {
 
 // Check to see if Policy is signed correctly.
 func doesPolicySignatureMatch(formValues http.Header) APIErrorCode {
-	// For SignV2 - Signature field will be valid
-	if _, ok := formValues["Signature"]; ok {
-		return doesPolicySignatureV2Match(formValues)
-	}
 	return doesPolicySignatureV4Match(formValues)
 }
 

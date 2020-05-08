@@ -10,7 +10,7 @@ const (
 	healthCheckPath          = "/health"
 	healthCheckLivenessPath  = "/live"
 	healthCheckReadinessPath = "/ready"
-	healthCheckPathPrefix    = minioReservedBucketPath + healthCheckPath
+	healthCheckPathPrefix    = radioReservedBucketPath + healthCheckPath
 )
 
 // registerHealthCheckRouter - add handler functions for liveness and readiness routes.

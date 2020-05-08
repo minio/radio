@@ -1,7 +1,5 @@
 package cmd
 
-import "context"
-
 // Returns number of errors that occurred the most (incl. nil) and the
 // corresponding error value. NB When there is more than one error value that
 // occurs maximum number of times, the error value returned depends on how
@@ -36,7 +34,7 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 // reduceQuorumErrs behaves like reduceErrs by only for returning
 // values of maximally occurring errors validated against a generic
 // quorum number that can be read or write quorum depending on usage.
-func reduceQuorumErrs(ctx context.Context, errs []error, ignoredErrs []error, quorum int, quorumErr error) error {
+func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) error {
 	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
 	if maxCount >= quorum {
 		return maxErr
@@ -46,12 +44,12 @@ func reduceQuorumErrs(ctx context.Context, errs []error, ignoredErrs []error, qu
 
 // reduceReadQuorumErrs behaves like reduceErrs but only for returning
 // values of maximally occurring errors validated against readQuorum.
-func reduceReadQuorumErrs(ctx context.Context, errs []error, ignoredErrs []error, readQuorum int) (maxErr error) {
-	return reduceQuorumErrs(ctx, errs, ignoredErrs, readQuorum, InsufficientReadQuorum{})
+func reduceReadQuorumErrs(errs []error, ignoredErrs []error, readQuorum int) (maxErr error) {
+	return reduceQuorumErrs(errs, ignoredErrs, readQuorum, InsufficientReadQuorum{})
 }
 
 // reduceWriteQuorumErrs behaves like reduceErrs but only for returning
 // values of maximally occurring errors validated against writeQuorum.
-func reduceWriteQuorumErrs(ctx context.Context, errs []error, ignoredErrs []error, writeQuorum int) (maxErr error) {
-	return reduceQuorumErrs(ctx, errs, ignoredErrs, writeQuorum, InsufficientWriteQuorum{})
+func reduceWriteQuorumErrs(errs []error, writeQuorum int) (maxErr error) {
+	return reduceQuorumErrs(errs, nil, writeQuorum, InsufficientWriteQuorum{})
 }

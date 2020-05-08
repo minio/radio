@@ -1303,8 +1303,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case errDataTooSmall:
 		apiErr = ErrEntityTooSmall
-	case errAuthentication:
-		apiErr = ErrAccessDenied
 	case auth.ErrInvalidAccessKeyLength:
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:

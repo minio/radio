@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v2"
-	lockRESTVersionPrefix = SlashSeparator + "v2"
-	lockRESTPrefix        = minioReservedBucketPath + "/lock"
+	lockRESTVersion       = "v1"
+	lockRESTVersionPrefix = SlashSeparator + "v1"
+	lockRESTPrefix        = radioReservedBucketPath + "/lock"
 )
 
 const (
@@ -22,8 +22,6 @@ const (
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.
 	lockRESTSource = "source"
-	// Resource contains a entity to be locked/unlocked.
-	lockRESTResource = "resource"
 )
 
 var (

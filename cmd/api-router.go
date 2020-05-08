@@ -105,8 +105,4 @@ func registerAPIRouter(router *mux.Router, bucketName string) {
 
 	// ListBuckets
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler)))
-
-	// If none of the routes match add default error handler routes
-	apiRouter.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
-	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler))
 }

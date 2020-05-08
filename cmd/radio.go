@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -63,7 +65,18 @@ func radioMain(ctx *cli.Context) {
 		logger.FatalIf(err, "Invalid command line arguments")
 	}
 
-	endpoints, err := createServerEndpoints(ctx.String("address"), rconfig.Distribute.Peers)
+	handleCommonCmdArgs(ctx)
+
+	// Get port to listen on from radio address
+	globalRadioHost, globalRadioPort = mustSplitHostPort(globalCLIContext.Addr)
+
+	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+	// to IPv6 address ie minio will start listening on IPv6 address whereas another
+	// (non-)minio process is listening on IPv4 of given port.
+	// To avoid this error situation we check for port availability.
+	logger.FatalIf(checkPortAvailability(globalRadioHost, globalRadioPort), "Unable to start the radio")
+
+	endpoints, err := createServerEndpoints(net.JoinHostPort(globalRadioHost, globalRadioPort), rconfig.Distribute.Peers)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	if len(endpoints) > 0 {
@@ -204,7 +217,7 @@ func newBucketClients(bcfgs []remoteConfig) ([]bucketClient, error) {
 func (g *Radio) NewRadioLayer() (ObjectLayer, error) {
 	var radioLockers []dsync.NetLocker
 	for _, endpoint := range g.endpoints {
-		radioLockers = append(radioLockers, newLockAPI(endpoint))
+		radioLockers = append(radioLockers, newLockAPI(endpoint, g.rconfig.Distribute.Token))
 	}
 
 	s := radioObjects{
@@ -451,8 +464,7 @@ func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object 
 	for index := range rs3s.clnts {
 		index := index
 		g.Go(func() error {
-			nctx, cancel := context.WithTimeout(context.Background(),
-				3*time.Second)
+			nctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
 
 			var perr error
@@ -468,7 +480,7 @@ func (l *radioObjects) getObjectInfo(ctx context.Context, bucket string, object 
 		}, index)
 	}
 
-	if maxErr := reduceReadQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2); maxErr != nil {
+	if maxErr := reduceReadQuorumErrs(g.Wait(), nil, len(rs3s.clnts)/2); maxErr != nil {
 		return ObjectInfo{}, ErrorRespToObjectError(maxErr, bucket, object)
 	}
 
@@ -497,6 +509,7 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 	data := r.Reader
 
 	// Lock the object before reading.
+	fmt.Println(ctx, bucket, object)
 	objectLock := l.NewNSLock(ctx, bucket, object)
 	if err := objectLock.GetLock(globalObjectTimeout); err != nil {
 		return ObjectInfo{}, err
@@ -533,7 +546,7 @@ func (l *radioObjects) PutObject(ctx context.Context, bucket string, object stri
 	}
 
 	errs := g.Wait()
-	if maxErr := reduceWriteQuorumErrs(ctx, errs, nil, len(rs3s.clnts)/2+1); maxErr != nil {
+	if maxErr := reduceWriteQuorumErrs(errs, len(rs3s.clnts)/2+1); maxErr != nil {
 		for index, err := range errs {
 			if err == nil {
 				rs3s.clnts[index].RemoveObject(rs3s.clnts[index].Bucket, object)
@@ -606,7 +619,7 @@ func (l *radioObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 	}
 
 	errs := g.Wait()
-	if maxErr := reduceWriteQuorumErrs(ctx, errs, nil, len(rs3sSrc.clnts)/2+1); maxErr != nil {
+	if maxErr := reduceWriteQuorumErrs(errs, len(rs3sSrc.clnts)/2+1); maxErr != nil {
 		for index, err := range errs {
 			if err == nil {
 				rs3sDest.clnts[index].RemoveObject(
@@ -644,7 +657,7 @@ func (l *radioObjects) DeleteObject(ctx context.Context, bucket string, object s
 		}, index)
 	}
 
-	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1)
+	return reduceWriteQuorumErrs(g.Wait(), len(rs3s.clnts)/2+1)
 }
 
 func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
@@ -710,7 +723,7 @@ func (l *radioObjects) DeleteObjects(ctx context.Context, bucket string, objects
 	for objName, errs := range multiObjectError {
 		for idx, robjName := range objects {
 			if objName == robjName {
-				errs[idx] = reduceWriteQuorumErrs(ctx, errs, nil, len(rs3s.clnts)/2+1)
+				errs[idx] = reduceWriteQuorumErrs(errs, len(rs3s.clnts)/2+1)
 			}
 		}
 	}
@@ -809,7 +822,7 @@ func (l *radioObjects) PutObjectPart(ctx context.Context, bucket string, object 
 		}, index)
 	}
 
-	if maxErr := reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3s.clnts)/2+1); maxErr != nil {
+	if maxErr := reduceWriteQuorumErrs(g.Wait(), len(rs3s.clnts)/2+1); maxErr != nil {
 		return pi, ErrorRespToObjectError(maxErr, bucket, object)
 	}
 
@@ -878,7 +891,7 @@ func (l *radioObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 		}, index)
 	}
 
-	if maxErr := reduceWriteQuorumErrs(ctx, g.Wait(), nil, len(rs3sDest.clnts)/2+1); maxErr != nil {
+	if maxErr := reduceWriteQuorumErrs(g.Wait(), len(rs3sDest.clnts)/2+1); maxErr != nil {
 		return p, ErrorRespToObjectError(maxErr, srcBucket, srcObject)
 	}
 
