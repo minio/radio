@@ -135,15 +135,15 @@ func (client *lockRESTClient) Expired(args dsync.LockArgs) (expired bool, err er
 	return client.restCall(lockRESTMethodExpired, args)
 }
 
-func newLockAPI(endpoint Endpoint) dsync.NetLocker {
+func newLockAPI(endpoint Endpoint, token string) dsync.NetLocker {
 	if endpoint.IsLocal {
 		return globalLockServers[endpoint]
 	}
-	return newlockRESTClient(endpoint)
+	return newlockRESTClient(endpoint, token)
 }
 
 // Returns a lock rest client.
-func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
+func newlockRESTClient(endpoint Endpoint, token string) *lockRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -160,7 +160,9 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	}
 
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient, err := rest.NewClient(serverURL, trFn, func() string {
+		return token
+	})
 	if err != nil {
 		logger.LogIf(GlobalContext, err)
 		return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}

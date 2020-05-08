@@ -16,9 +16,13 @@ import (
 	xhttp "github.com/minio/radio/cmd/http"
 )
 
-// Verify if request has JWT.
-func isRequestJWT(r *http.Request) bool {
-	return strings.HasPrefix(r.Header.Get(xhttp.Authorization), jwtAlgorithm)
+const (
+	bearerToken = "Bearer"
+)
+
+// Verify if request has Bearer.
+func isRequestBearerToken(r *http.Request) bool {
+	return strings.HasPrefix(r.Header.Get(xhttp.Authorization), bearerToken)
 }
 
 // Verify if request has AWS Signature Version '4'.
@@ -26,21 +30,9 @@ func isRequestSignatureV4(r *http.Request) bool {
 	return strings.HasPrefix(r.Header.Get(xhttp.Authorization), signV4Algorithm)
 }
 
-// Verify if request has AWS Signature Version '2'.
-func isRequestSignatureV2(r *http.Request) bool {
-	return (!strings.HasPrefix(r.Header.Get(xhttp.Authorization), signV4Algorithm) &&
-		strings.HasPrefix(r.Header.Get(xhttp.Authorization), signV2Algorithm))
-}
-
 // Verify if request has AWS PreSign Version '4'.
 func isRequestPresignedSignatureV4(r *http.Request) bool {
 	_, ok := r.URL.Query()[xhttp.AmzCredential]
-	return ok
-}
-
-// Verify request has AWS PreSign Version '2'.
-func isRequestPresignedSignatureV2(r *http.Request) bool {
-	_, ok := r.URL.Query()[xhttp.AmzAccessKeyID]
 	return ok
 }
 
@@ -63,28 +55,22 @@ type authType int
 const (
 	authTypeUnknown authType = iota
 	authTypePresigned
-	authTypePresignedV2
 	authTypePostPolicy
 	authTypeStreamingSigned
 	authTypeSigned
-	authTypeSignedV2
-	authTypeJWT
+	authTypeBearer
 )
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
-	if isRequestSignatureV2(r) {
-		return authTypeSignedV2
-	} else if isRequestPresignedSignatureV2(r) {
-		return authTypePresignedV2
-	} else if isRequestSignStreamingV4(r) {
+	if isRequestSignStreamingV4(r) {
 		return authTypeStreamingSigned
 	} else if isRequestSignatureV4(r) {
 		return authTypeSigned
 	} else if isRequestPresignedSignatureV4(r) {
 		return authTypePresigned
-	} else if isRequestJWT(r) {
-		return authTypeJWT
+	} else if isRequestBearerToken(r) {
+		return authTypeBearer
 	} else if isRequestPostPolicySignatureV4(r) {
 		return authTypePostPolicy
 	}
@@ -114,7 +100,6 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) APIErrorCode {
 
 // Check request auth type verifies the incoming http request
 // - validates the request signature
-// - validates the policy action if anonymous tests bucket policies if any,
 //   for authenticated requests validates IAM policies.
 // returns APIErrorCode if any to be replied to the client.
 func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Action, bucketName, objectName string) (s3Err APIErrorCode) {
@@ -122,11 +107,6 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 	switch getRequestAuthType(r) {
 	case authTypeUnknown, authTypeStreamingSigned:
 		return ErrAccessDenied
-	case authTypePresignedV2, authTypeSignedV2:
-		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
-			return s3Err
-		}
-		cred, s3Err = getReqAccessKeyV2(r)
 	case authTypeSigned, authTypePresigned:
 		region := globalServerRegion
 		switch action {
@@ -143,14 +123,6 @@ func checkRequestAuthType(ctx context.Context, r *http.Request, action policy.Ac
 	}
 
 	return checkClaimsFromToken(r, cred)
-}
-
-// Verify if request has valid AWS Signature Version '2'.
-func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
-	if isRequestSignatureV2(r) {
-		return doesSignV2Match(r)
-	}
-	return doesPresignV2SignatureMatch(r)
 }
 
 func reqSignatureV4Verify(r *http.Request, region string, stype serviceType) (s3Error APIErrorCode) {
@@ -223,9 +195,7 @@ func setAuthHandler(h http.Handler) http.Handler {
 // List of all support S3 auth types.
 var supportedS3AuthTypes = map[authType]struct{}{
 	authTypePresigned:       {},
-	authTypePresignedV2:     {},
 	authTypeSigned:          {},
-	authTypeSignedV2:        {},
 	authTypePostPolicy:      {},
 	authTypeStreamingSigned: {},
 }
@@ -240,7 +210,10 @@ func isSupportedS3AuthType(aType authType) bool {
 func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	aType := getRequestAuthType(r)
 	if isSupportedS3AuthType(aType) {
-		// Let top level caller validate for anonymous and known signed requests.
+		// Let top level caller validate for signed requests.
+		a.handler.ServeHTTP(w, r)
+		return
+	} else if aType == authTypeBearer {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
@@ -255,8 +228,6 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	switch atype {
 	case authTypeUnknown:
 		return ErrAccessDenied
-	case authTypeSignedV2, authTypePresignedV2:
-		cred, s3Err = getReqAccessKeyV2(r)
 	case authTypeStreamingSigned, authTypePresigned, authTypeSigned:
 		region := globalServerRegion
 		cred, s3Err = getReqAccessKeyV4(r, region, serviceS3)

@@ -264,7 +264,7 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
+		isS3Request := !strings.HasPrefix(r.URL.Path, radioReservedBucketPath)
 		apiStatsWriter := &recordAPIStats{w, UTCNow(), false, 0, isS3Request}
 
 		// Time start before the call is about to start.
@@ -330,6 +330,7 @@ func extractAPIVersion(r *http.Request) string {
 // If none of the http routes match respond with appropriate errors
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	version := extractAPIVersion(r)
+	fmt.Println(r.URL, lockRESTPrefix)
 	switch {
 	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
 		desc := fmt.Sprintf("Expected 'lock' API version '%s', instead found '%s', please upgrade the servers",

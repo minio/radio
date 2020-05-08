@@ -14,26 +14,17 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/radio/cmd/rest"
 )
-
-var (
-	envTokenValue = env.Get("RADIO_LOCK_TOKEN", "")
-)
-
-func newAuthToken() string {
-	return envTokenValue
-}
 
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 
 // Authenticates storage client's requests and validates for skewed time.
-func lockRequestValidate(r *http.Request) error {
+func lockRequestValidate(r *http.Request, token string) error {
 	authToken := r.Header.Get("Authorization")
-	if subtle.ConstantTimeCompare([]byte(authToken), []byte(fmt.Sprintf("Bearer %s", envTokenValue))) != 1 {
+	if subtle.ConstantTimeCompare([]byte(authToken), []byte(fmt.Sprintf("Bearer %s", token))) != 1 {
 		return errors.New("invalid auth token")
 	}
 	requestTimeStr := r.Header.Get("X-Radio-Time")
@@ -72,7 +63,8 @@ const (
 
 // To abstract a node over network.
 type lockRESTServer struct {
-	ll *localLocker
+	ll    *localLocker
+	token string
 }
 
 func (l *lockRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -82,7 +74,7 @@ func (l *lockRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
 
 // IsValid - To authenticate and verify the time difference.
 func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
-	if err := lockRequestValidate(r); err != nil {
+	if err := lockRequestValidate(r, l.token); err != nil {
 		l.writeErrorResponse(w, err)
 		return false
 	}
@@ -265,7 +257,7 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 // - some network error (and server is up normally)
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
-func lockMaintenance(ctx context.Context, interval time.Duration) error {
+func lockMaintenance(ctx context.Context, interval time.Duration, endpoints Endpoints, token string) error {
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
@@ -274,8 +266,8 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			// Locks are only held on first zone, make sure that
 			// we only look for ownership of locks from endpoints
 			// on first zone.
-			for _, endpoint := range globalEndpoints[0].Endpoints {
-				c := newLockAPI(endpoint)
+			for _, endpoint := range endpoints {
+				c := newLockAPI(endpoint, token)
 				if !c.IsOnline() {
 					nlripsMap[nlrip.name]++
 					continue
@@ -302,10 +294,10 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			}
 
 			// Read locks we assume quorum for be N/2 success
-			quorum := len(globalEndpoints) / 2
+			quorum := len(endpoints) / 2
 			if nlrip.lri.Writer {
 				// For write locks we need N/2+1 success
-				quorum = len(globalEndpoints)/2 + 1
+				quorum = len(endpoints)/2 + 1
 			}
 
 			// less than the quorum, we have locks expired.
@@ -325,7 +317,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 }
 
 // Start lock maintenance from all lock servers.
-func startLockMaintenance() {
+func startLockMaintenance(endpoints Endpoints, token string) {
 	// Start with random sleep time, so as to avoid "synchronous checks" between servers
 	time.Sleep(time.Duration(rand.Float64() * float64(lockMaintenanceInterval)))
 
@@ -340,34 +332,33 @@ func startLockMaintenance() {
 		case <-GlobalContext.Done():
 			return
 		case <-ticker.C:
-			lockMaintenance(GlobalContext, lockValidityCheckInterval)
+			lockMaintenance(GlobalContext, lockValidityCheckInterval, endpoints, token)
 		}
 	}
 }
 
 // registerLockRESTHandlers - register lock rest router.
-func registerLockRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
-	queries := restQueries(lockRESTUID, lockRESTSource, lockRESTResource)
-	for _, ep := range endpointZones {
-		for _, endpoint := range ep.Endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-
-			lockServer := &lockRESTServer{
-				ll: newLocker(endpoint),
-			}
-
-			subrouter := router.PathPrefix(path.Join(lockRESTPrefix, endpoint.Path)).Subrouter()
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler)).Queries(queries...)
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler)).Queries(queries...)
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler)).Queries(queries...)
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler)).Queries(queries...)
-			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodExpired).HandlerFunc(httpTraceAll(lockServer.ExpiredHandler)).Queries(queries...)
-
-			globalLockServers[endpoint] = lockServer.ll
+func registerLockRESTHandlers(router *mux.Router, endpoints Endpoints, token string) {
+	queries := restQueries(lockRESTUID, lockRESTSource)
+	for _, endpoint := range endpoints {
+		if !endpoint.IsLocal {
+			continue
 		}
+
+		lockServer := &lockRESTServer{
+			ll:    newLocker(endpoint),
+			token: token,
+		}
+
+		subrouter := router.PathPrefix(path.Join(lockRESTPrefix, lockRESTVersionPrefix)).Subrouter()
+		subrouter.Methods(http.MethodPost).Path(lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler)).Queries(queries...)
+		subrouter.Methods(http.MethodPost).Path(lockRESTMethodExpired).HandlerFunc(httpTraceAll(lockServer.ExpiredHandler)).Queries(queries...)
+
+		globalLockServers[endpoint] = lockServer.ll
 	}
 
-	go startLockMaintenance()
+	go startLockMaintenance(endpoints, token)
 }

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -64,18 +63,6 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	// error during initialization will be shown as a fatal message
 	logger.Disable = true
 
-	// Handle common command args.
-	handleCommonCmdArgs(ctx)
-
-	// Get port to listen on from radio address
-	globalRadioHost, globalRadioPort = mustSplitHostPort(globalCLIContext.Addr)
-
-	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
-	// to IPv6 address ie minio will start listening on IPv6 address whereas another
-	// (non-)minio process is listening on IPv4 of given port.
-	// To avoid this error situation we check for port availability.
-	logger.FatalIf(checkPortAvailability(globalRadioHost, globalRadioPort), "Unable to start the radio")
-
 	// Check and load TLS certificates.
 	var err error
 	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig(radio.rconfig)
@@ -89,7 +76,7 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	logger.LogIf(context.Background(), setMaxResources())
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background(), globalEndpoints)
+	globalConsoleSys = NewConsoleLogger(context.Background())
 
 	// Override any values from ENVs.
 	if err := lookupConfigEnv(radio.rconfig); err != nil {
@@ -107,9 +94,15 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 		globalObjLayerMutex.Unlock()
 	}
 
-	router := mux.NewRouter().SkipClean(true)
+	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
-	registerLockRESTHandlers(router, globalEndpoints)
+	// If none of the routes match add default error handler routes
+	router.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
+	router.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler))
+
+	if len(radio.endpoints) > 0 {
+		registerLockRESTHandlers(router, radio.endpoints, radio.rconfig.Distribute.Token)
+	}
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
@@ -120,10 +113,6 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	for bucket := range radio.rconfig.Buckets {
 		registerAPIRouter(router, bucket)
 	}
-
-	// If none of the routes match add default error handler routes
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
-	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {

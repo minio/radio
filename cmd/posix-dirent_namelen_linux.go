@@ -1,3 +1,5 @@
+// +build linux,!appengine
+
 package cmd
 
 import (

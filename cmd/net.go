@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	xnet "github.com/minio/minio/pkg/net"
@@ -177,12 +179,15 @@ func checkPortAvailability(host, port string) (err error) {
 	network := []string{"tcp", "tcp4", "tcp6"}
 	for _, n := range network {
 		l, err := net.Listen(n, net.JoinHostPort(host, port))
-		if err != nil {
-			return err
-		}
-		// As we are able to listen on this network, the port is not in use.
-		// Close the listener and continue check other networks.
-		if err = l.Close(); err != nil {
+		if err == nil {
+			// As we are able to listen on this network, the port is not in use.
+			// Close the listener and continue check other networks.
+			if err = l.Close(); err != nil {
+				return err
+			}
+		} else if errors.Is(err, syscall.EADDRINUSE) {
+			// As we got EADDRINUSE error, the port is in use by other process.
+			// Return the error.
 			return err
 		}
 	}
@@ -199,9 +204,23 @@ func isLocalHost(host string, port string, localPort string) (bool, error) {
 		return false, err
 	}
 
+	nonInterIPV4s := mustGetLocalIP4().Intersection(hostIPs)
+	if nonInterIPV4s.IsEmpty() {
+		hostIPs = hostIPs.ApplyFunc(func(ip string) string {
+			if net.ParseIP(ip).IsLoopback() {
+				// Any loopback IP which is not 127.0.0.1
+				// convert it to check for intersections,
+				return "127.0.0.1"
+			}
+			return ip
+		})
+		nonInterIPV4s = mustGetLocalIP4().Intersection(hostIPs)
+	}
+	nonInterIPV6s := mustGetLocalIP6().Intersection(hostIPs)
+
 	// If intersection of two IP sets is not empty, then the host is localhost.
-	isLocalv4 := !localIP4.Intersection(hostIPs).IsEmpty()
-	isLocalv6 := !localIP6.Intersection(hostIPs).IsEmpty()
+	isLocalv4 := !nonInterIPV4s.IsEmpty()
+	isLocalv6 := !nonInterIPV6s.IsEmpty()
 	if port != "" {
 		return (isLocalv4 || isLocalv6) && (port == localPort), nil
 	}
