@@ -20,7 +20,18 @@ certs:
 distribute:
   peers: https://server{1...32}:9000/
   token: 32bytestring
-
+## Local caching based on MinIO
+## caching implementation
+cache:
+  drives:
+    - /mnt/cache1
+    - /mnt/cache2
+    - /mnt/cache3
+  exclude:
+    - bucket1/*
+    - "*.db"
+  quota: 90
+  expiry: 30
 ## Radio buckets configuration with all its remotes
 ## Supports two protection schema's
 ## - mirror

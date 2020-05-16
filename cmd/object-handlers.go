@@ -100,7 +100,9 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
-
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
 	getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
 		isSuffixLength := false
 		if offset < 0 {
@@ -183,8 +185,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			logger.LogIf(ctx, err, logger.Application)
 		}
 	}
-
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, rs, r.Header, ReadLock, ObjectOptions{})
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
+	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, ReadLock, ObjectOptions{})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -269,8 +274,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			logger.LogIf(ctx, err)
 		}
 	}
-
-	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+	objInfo, err := getObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
@@ -402,12 +410,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
 	var lock = NoLock
 	if !cpSrcDstSame {
 		lock = ReadLock
 	}
 	var rs *HTTPRangeSpec
-	gr, err := objectAPI.GetObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, ObjectOptions{})
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, ObjectOptions{})
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
@@ -570,6 +582,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 		reader    io.Reader
 		s3Err     APIErrorCode
+		putObject = objectAPI.PutObject
 	)
 	reader = r.Body
 
@@ -608,8 +621,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
+	if api.CacheAPI() != nil {
+		putObject = api.CacheAPI().PutObject
+	}
 	// Create the object..
-	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, ObjectOptions{UserDefined: metadata})
+	objInfo, err := putObject(ctx, bucket, object, pReader, ObjectOptions{UserDefined: metadata})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -770,8 +786,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 	getOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
 	srcOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
 
-	gr, err := objectAPI.GetObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, ReadLock, getOpts)
+	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, ReadLock, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
@@ -1231,7 +1251,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	if err := deleteObject(ctx, objectAPI, bucket, object, r); err != nil {
+	if err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r); err != nil {
 		switch err.(type) {
 		case BucketNotFound:
 			// When bucket doesn't exist specially handle it.

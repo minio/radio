@@ -10,6 +10,18 @@ distribute:
 
 journal:
   dir: /mnt/errs
+
+cache:
+  drives:
+    - /mnt/cache1
+    - /mnt/cache2
+    - /mnt/cache3
+  exclude:
+    - bucket1/*
+    - "*.db"
+  quota: 90
+  expiry: 30
+
 buckets:
   radiobucket1:
     access_key: Q3AM3UQ867SPQQA43P2F

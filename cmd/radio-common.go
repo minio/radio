@@ -12,6 +12,11 @@ import (
 	minio "github.com/minio/minio-go/v6"
 )
 
+// StatInfo -  alias for statInfo
+type StatInfo struct {
+	statInfo
+}
+
 // AnonErrToObjectErr - converts standard http codes into meaningful object layer errors.
 func AnonErrToObjectErr(statusCode int, params ...string) error {
 	bucket := ""

@@ -178,6 +178,12 @@ type radioConfig struct {
 		Peers string `yaml:"peers"`
 		Token string `yaml:"token"`
 	} `yaml:"distribute"`
+	Cache struct {
+		Drives  []string `yaml:"drives"`
+		Exclude []string `yaml:"exclude"`
+		Quota   int      `yaml:"quota"`
+		Expiry  int      `yaml:"expiry"`
+	} `yaml:"cache"`
 	Buckets map[string]bucketConfig `json:"buckets"`
 	Journal struct {
 		Dir string `yaml:"dir"`

@@ -82,6 +82,16 @@ func startRadio(ctx *cli.Context, radio *Radio) {
 	if err := lookupConfigEnv(radio.rconfig); err != nil {
 		logger.FatalIf(err, "Unable to initialize server config")
 	}
+	if globalCacheConfig.Enabled {
+		// initialize the new disk cache objects.
+		var cacheAPI CacheObjectLayer
+		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+
+		globalObjLayerMutex.Lock()
+		globalCacheObjectAPI = cacheAPI
+		globalObjLayerMutex.Unlock()
+	}
 
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 

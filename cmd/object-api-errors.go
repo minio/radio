@@ -2,8 +2,92 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"path"
 )
+
+// Converts underlying storage error. Convenience function written to
+// handle all cases where we have known types of errors returned by
+// underlying storage layer.
+func toObjectErr(err error, params ...string) error {
+	switch err {
+	case errVolumeNotFound:
+		if len(params) >= 1 {
+			err = BucketNotFound{Bucket: params[0]}
+		}
+	case errVolumeNotEmpty:
+		if len(params) >= 1 {
+			err = BucketNotEmpty{Bucket: params[0]}
+		}
+	case errVolumeExists:
+		if len(params) >= 1 {
+			err = BucketExists{Bucket: params[0]}
+		}
+	case errDiskFull:
+		err = StorageFull{}
+	case errTooManyOpenFiles:
+		err = SlowDown{}
+	case errFileAccessDenied:
+		if len(params) >= 2 {
+			err = PrefixAccessDenied{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errFileParentIsFile:
+		if len(params) >= 2 {
+			err = ParentIsObject{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errIsNotRegular:
+		if len(params) >= 2 {
+			err = ObjectExistsAsDirectory{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errFileNotFound:
+		switch len(params) {
+		case 2:
+			err = ObjectNotFound{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		case 3:
+			err = InvalidUploadID{
+				Bucket:   params[0],
+				Object:   params[1],
+				UploadID: params[2],
+			}
+		}
+	case errFileNameTooLong:
+		if len(params) >= 2 {
+			err = ObjectNameInvalid{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errDataTooLarge:
+		if len(params) >= 2 {
+			err = ObjectTooLarge{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errDataTooSmall:
+		if len(params) >= 2 {
+			err = ObjectTooSmall{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case io.ErrUnexpectedEOF, io.ErrShortWrite:
+		err = IncompleteBody{}
+	}
+	return err
+}
 
 // SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
 type SignatureDoesNotMatch struct{}

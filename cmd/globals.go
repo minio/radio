@@ -9,6 +9,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/pubsub"
+	"github.com/minio/radio/cmd/config/cache"
 	xhttp "github.com/minio/radio/cmd/http"
 )
 
@@ -95,6 +96,9 @@ var (
 	globalPublicCerts []*x509.Certificate
 
 	globalDomainNames []string // Root domains for virtual host style requests
+
+	// Disk cache drives
+	globalCacheConfig cache.Config
 
 	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops

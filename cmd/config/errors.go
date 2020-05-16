@@ -2,6 +2,47 @@ package config
 
 // UI errors
 var (
+	ErrInvalidCacheDrivesValue = newErrFn(
+		"Invalid cache drive value",
+		"Please check the value in your config.yml",
+		"Mounted drives or directories are wrong",
+	)
+
+	ErrInvalidCacheExcludesValue = newErrFn(
+		"Invalid cache excludes value",
+		"Please check the passed value in your config.yml",
+		"Cache exclusion patterns are incorrect please refer to documentation",
+	)
+
+	ErrInvalidCacheExpiryValue = newErrFn(
+		"Invalid cache expiry value",
+		"Please check the passed value in your config.yml",
+		"Valid cache expiry duration must be in days",
+	)
+
+	ErrInvalidCacheQuota = newErrFn(
+		"Invalid cache quota value",
+		"Please check the passed value in your config.yml",
+		" Valid cache quota value must be between 0-100",
+	)
+
+	ErrInvalidCacheAfter = newErrFn(
+		"Invalid cache after value",
+		"Please check the passed value",
+		"RADIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
+	)
+
+	ErrInvalidCacheWatermarkLow = newErrFn(
+		"Invalid cache low watermark value",
+		"Please check the passed value",
+		"RADIO_CACHE_WATERMARK_LOW: Valid cache low watermark value must be between 0-100",
+	)
+
+	ErrInvalidCacheWatermarkHigh = newErrFn(
+		"Invalid cache high watermark value",
+		"Please check the passed value",
+		"RADIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
+	)
 	ErrInvalidAddressFlag = newErrFn(
 		"--address input is invalid",
 		"Please check --address parameter",

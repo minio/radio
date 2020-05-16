@@ -207,6 +207,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	}
 
 	deleteObjectsFn := objectAPI.DeleteObjects
+	if api.CacheAPI() != nil {
+		deleteObjectsFn = api.CacheAPI().DeleteObjects
+	}
 
 	var objectsToDelete = map[string]int{}
 	var dErrs = make([]APIErrorCode, len(deleteObjects.Objects))

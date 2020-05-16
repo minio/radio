@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
 	"fmt"
 	"net"
 	"runtime"
 	"strings"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/color"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -32,6 +34,12 @@ func getCertificateChainMsg(certs []*x509.Certificate) string {
 // Prints the certificate expiry message.
 func printCertificateMsg(certs []*x509.Certificate) {
 	logStartupMessage(getCertificateChainMsg(certs))
+}
+func printCacheStorageInfo(storageInfo CacheStorageInfo) {
+	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
+		humanize.IBytes(uint64(storageInfo.Free)),
+		humanize.IBytes(uint64(storageInfo.Total)))
+	logStartupMessage(msg)
 }
 
 // Prints startup message for Object API acces, prints link to our SDK documentation.
@@ -116,6 +124,11 @@ func printCLIAccessMsg(endPoint string, alias string) {
 // Prints the formatted startup message.
 func printRadioStartupMessage(apiEndPoints []string) {
 	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+	// If cache layer is enabled, print cache capacity.
+	cacheAPI := newCachedObjectLayerFn()
+	if cacheAPI != nil {
+		printCacheStorageInfo(cacheAPI.StorageInfo(context.Background()))
+	}
 
 	// Prints credential.
 	printRadioCommonMsg(strippedAPIEndpoints)
