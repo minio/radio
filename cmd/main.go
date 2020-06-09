@@ -100,8 +100,8 @@ func newApp(name string) *cli.App {
 	app.Name = name
 	app.Author = "MinIO, Inc."
 	app.Version = Version
-	app.Usage = "Perform synchronous replication or erasure coding across object stores"
-	app.Description = `RADIO is called Redundant Array of Distributed Independent Objectstores, supports synchronous replication and erasure coding across object storages`
+	app.Usage = "Perform synchronous replication across object stores"
+	app.Description = `RADIO is called Redundant Array of Distributed Independent Objectstores, supports synchronous replication across object storages`
 	app.Flags = GlobalFlags
 	app.HideHelpCommand = true // Hide `help, h` command, we already have `radio --help`.
 	app.Commands = commands

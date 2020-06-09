@@ -222,7 +222,6 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 	if cache != nil {
 		deleteObject = cache.DeleteObject
 	}
-	// Proceed to delete the object.
 	if err = deleteObject(ctx, bucket, object); err != nil {
 		return err
 	}

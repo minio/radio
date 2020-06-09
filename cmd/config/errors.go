@@ -43,7 +43,6 @@ var (
 		"Please check the passed value",
 		"RADIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
 	)
-
 	ErrInvalidAddressFlag = newErrFn(
 		"--address input is invalid",
 		"Please check --address parameter",

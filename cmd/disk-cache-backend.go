@@ -34,9 +34,6 @@ const (
 	cacheExpiryDays   = time.Duration(90 * time.Hour * 24) // defaults to 90 days
 )
 
-// Beginning of unix time is treated as sentinel value here.
-var timeSentinel = time.Unix(0, 0).UTC()
-
 // CacheChecksumInfoV1 - carries checksums of individual blocks on disk.
 type CacheChecksumInfoV1 struct {
 	Algorithm string `json:"algorithm"`

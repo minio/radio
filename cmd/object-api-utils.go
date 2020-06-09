@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/minio/minio/pkg/hash"
@@ -33,6 +34,9 @@ const (
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 )
+
+// Beginning of unix time is treated as sentinel value here.
+var timeSentinel = time.Unix(0, 0).UTC()
 
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.

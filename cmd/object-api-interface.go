@@ -67,4 +67,9 @@ type ObjectLayer interface {
 	ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error)
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
+
+	// Heal operations
+	HealPutObject(ctx context.Context, log journalEntry) error
+	HealDeleteObject(ctx context.Context, log journalEntry) error
+	HealCopyObject(ctx context.Context, log journalEntry) error
 }

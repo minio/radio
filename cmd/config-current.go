@@ -13,7 +13,6 @@ func lookupConfigEnv(rconfig radioConfig) (err error) {
 	if err != nil {
 		return fmt.Errorf("Invalid region configuration: %w", err)
 	}
-
 	globalCacheConfig, err = cache.LookupConfig()
 	if err != nil {
 		return fmt.Errorf("Unable to setup cache: %w", err)

@@ -35,7 +35,6 @@ func getCertificateChainMsg(certs []*x509.Certificate) string {
 func printCertificateMsg(certs []*x509.Certificate) {
 	logStartupMessage(getCertificateChainMsg(certs))
 }
-
 func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
 		humanize.IBytes(uint64(storageInfo.Free)),
@@ -130,6 +129,7 @@ func printRadioStartupMessage(apiEndPoints []string) {
 	if cacheAPI != nil {
 		printCacheStorageInfo(cacheAPI.StorageInfo(context.Background()))
 	}
+
 	// Prints credential.
 	printRadioCommonMsg(strippedAPIEndpoints)
 

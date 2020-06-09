@@ -97,14 +97,17 @@ var (
 
 	globalDomainNames []string // Root domains for virtual host style requests
 
-	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
-	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops
-
 	// Disk cache drives
 	globalCacheConfig cache.Config
+
+	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string
 
+	globalHealSys *HealSys
+
+	globalNotificationSys *NotificationSys
 	// Add new variable global values here.
 )

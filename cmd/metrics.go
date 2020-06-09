@@ -130,7 +130,6 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 			api,
 		)
 	}
-
 	// Cache related metrics
 	if globalCacheConfig.Enabled {
 		ch <- prometheus.MustNewConstMetric(

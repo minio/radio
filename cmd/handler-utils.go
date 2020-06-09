@@ -330,7 +330,6 @@ func extractAPIVersion(r *http.Request) string {
 // If none of the http routes match respond with appropriate errors
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	version := extractAPIVersion(r)
-	fmt.Println(r.URL, lockRESTPrefix)
 	switch {
 	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
 		desc := fmt.Sprintf("Expected 'lock' API version '%s', instead found '%s', please upgrade the servers",
@@ -340,6 +339,15 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			Description:    desc,
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL)
+	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
+		desc := fmt.Sprintf("Expected 'peer' API version '%s', instead found '%s', please upgrade the servers",
+			peerRESTVersion, version)
+		writeErrorResponseString(r.Context(), w, APIError{
+			Code:           "XRadioPeerVersionMismatch",
+			Description:    desc,
+			HTTPStatusCode: http.StatusBadRequest,
+		}, r.URL)
+
 	default:
 		desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
 		writeErrorResponse(r.Context(), w, APIError{
